@@ -1,0 +1,24 @@
+{
+  "expo": {
+    "name": "Neuro Chat",
+    "slug": "neuro-chat-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "jsEngine": "hermes",
+    "splash": {
+      "backgroundColor": "#F7F3EC"
+    },
+    "ios": {
+      "bundleIdentifier": "com.codex.neurochat"
+    },
+    "android": {
+      "package": "com.codex.neurochat"
+    },
+    "extra": {
+      "useMockAi": true,
+      "aiApiUrl": "",
+      "aiApiKey": ""
+    }
+  }
+}
