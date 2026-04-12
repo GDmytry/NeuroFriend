@@ -1,8 +1,15 @@
-﻿import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
+import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 
-import { generateAssistantReply } from "../services/aiService";
+import { generateAssistantReply } from "../services/aiRuntimeService";
 import { storage } from "../services/storage";
-import { ChatMessage, ChatThread, NeuralMode, SendMessageInput, User } from "../types";
+import {
+  ChatAttachment,
+  ChatMessage,
+  ChatThread,
+  NeuralMode,
+  SendMessageInput,
+  User
+} from "../types";
 import { createId } from "../utils/id";
 
 type ChatContextValue = {
@@ -19,16 +26,35 @@ type ChatContextValue = {
   getThreadById: (threadId: string) => ChatThread | undefined;
 };
 
-const ChatContext = createContext<ChatContextValue | undefined>(undefined);
+const ChatRuntimeContext = createContext<ChatContextValue | undefined>(undefined);
 
 type ChatProviderProps = {
   children: React.ReactNode;
   currentUser: User | null;
 };
 
-function buildThreadTitle(text: string) {
+function buildThreadTitle(text: string, attachments: ChatAttachment[] = []) {
   const trimmed = text.trim();
-  return trimmed.length > 32 ? `${trimmed.slice(0, 32)}...` : trimmed;
+  const base = trimmed || attachments[0]?.name || "Новый диалог";
+  return base.length > 32 ? `${base.slice(0, 32)}...` : base;
+}
+
+function buildVisibleUserText(text: string, attachments: ChatAttachment[] = []) {
+  const trimmed = text.trim();
+
+  if (trimmed) {
+    return trimmed;
+  }
+
+  if (attachments.length === 1) {
+    return `Файл: ${attachments[0].name}`;
+  }
+
+  if (attachments.length > 1) {
+    return `Прикреплено файлов: ${attachments.length}`;
+  }
+
+  return "";
 }
 
 export function ChatProvider({ children, currentUser }: ChatProviderProps) {
@@ -45,7 +71,7 @@ export function ChatProvider({ children, currentUser }: ChatProviderProps) {
       setIsReady(true);
     }
 
-    bootstrap();
+    void bootstrap();
   }, []);
 
   useEffect(() => {
@@ -138,21 +164,24 @@ export function ChatProvider({ children, currentUser }: ChatProviderProps) {
           }
         }
       },
-      sendMessage: async ({ threadId, text, mode }) => {
+      sendMessage: async ({ threadId, text, mode, attachments = [] }) => {
         if (!currentUser) {
           throw new Error("Пользователь не авторизован");
         }
 
-        if (!text.trim()) {
-          throw new Error("Сообщение не может быть пустым");
+        const visibleText = buildVisibleUserText(text, attachments);
+
+        if (!visibleText) {
+          throw new Error("Добавьте сообщение или хотя бы один текстовый файл");
         }
 
         const now = new Date().toISOString();
         const userMessage: ChatMessage = {
           id: createId(),
           author: "user",
-          text: text.trim(),
-          createdAt: now
+          text: visibleText,
+          createdAt: now,
+          attachments
         };
 
         const existingThread = threadId
@@ -162,7 +191,7 @@ export function ChatProvider({ children, currentUser }: ChatProviderProps) {
         const baseThread: ChatThread =
           existingThread ?? {
             id: createId(),
-            title: buildThreadTitle(text),
+            title: buildThreadTitle(text, attachments),
             mode,
             userId: currentUser.id,
             createdAt: now,
@@ -174,7 +203,7 @@ export function ChatProvider({ children, currentUser }: ChatProviderProps) {
         const assistantText = await generateAssistantReply({
           mode,
           history: nextHistory,
-          latestUserMessage: text
+          latestUserMessage: visibleText
         });
 
         const assistantMessage: ChatMessage = {
@@ -186,7 +215,10 @@ export function ChatProvider({ children, currentUser }: ChatProviderProps) {
 
         const updatedThread: ChatThread = {
           ...baseThread,
-          title: baseThread.messages.length === 0 ? buildThreadTitle(text) : baseThread.title,
+          title:
+            baseThread.messages.length === 0
+              ? buildThreadTitle(text, attachments)
+              : baseThread.title,
           mode,
           updatedAt: assistantMessage.createdAt,
           messages: [...nextHistory, assistantMessage]
@@ -205,11 +237,11 @@ export function ChatProvider({ children, currentUser }: ChatProviderProps) {
     [activeThread, activeThreadId, allThreads, currentUser, isReady, selectedMode, threads]
   );
 
-  return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;
+  return <ChatRuntimeContext.Provider value={value}>{children}</ChatRuntimeContext.Provider>;
 }
 
 export function useChat() {
-  const context = useContext(ChatContext);
+  const context = useContext(ChatRuntimeContext);
 
   if (!context) {
     throw new Error("useChat must be used inside ChatProvider");

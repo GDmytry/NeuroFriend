@@ -1,4 +1,5 @@
 export type NeuralMode = "friend" | "coach" | "psychologist";
+export type ThemePreference = "system" | "light" | "dark";
 
 export type User = {
   id: string;
@@ -15,11 +16,21 @@ export type AuthSession = {
 
 export type MessageAuthor = "user" | "assistant" | "system";
 
+export type ChatAttachment = {
+  id: string;
+  name: string;
+  uri: string;
+  mimeType: string;
+  size: number;
+  textContent: string;
+};
+
 export type ChatMessage = {
   id: string;
   author: MessageAuthor;
   text: string;
   createdAt: string;
+  attachments?: ChatAttachment[];
 };
 
 export type ChatThread = {
@@ -48,6 +59,7 @@ export type SendMessageInput = {
   threadId?: string;
   text: string;
   mode: NeuralMode;
+  attachments?: ChatAttachment[];
 };
 
 export type AiApiRole = "system" | "user" | "assistant";
@@ -61,4 +73,8 @@ export type AiApiPayload = {
   mode: NeuralMode;
   systemPrompt: string;
   messages: AiApiMessage[];
+};
+
+export type AppSettings = {
+  themePreference: ThemePreference;
 };

@@ -1,4 +1,4 @@
-﻿import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
@@ -14,10 +14,13 @@ import { ModeSelector } from "../components/ModeSelector";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { useAuth } from "../contexts/AuthContext";
 import { useChat } from "../contexts/ChatRuntimeContext";
+import { useSettings } from "../contexts/SettingsContext";
 
-export function RegisterScreen() {
+export function SignUpScreen() {
   const { register } = useAuth();
   const { selectedMode, setSelectedMode } = useChat();
+  const { theme } = useSettings();
+  const styles = useMemo(() => createStyles(theme.colors), [theme.colors]);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -49,8 +52,8 @@ export function RegisterScreen() {
         <View style={styles.header}>
           <Text style={styles.title}>Создайте аккаунт</Text>
           <Text style={styles.subtitle}>
-            Можно сразу выбрать стиль общения для первого диалога и начать пользоваться
-            приложением без дополнительной настройки.
+            Можно сразу выбрать стиль общения для первого диалога. Позже его можно менять в чате и
+            в настройках.
           </Text>
         </View>
 
@@ -89,43 +92,46 @@ export function RegisterScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  safe: {
-    flex: 1
-  },
-  content: {
-    padding: 20,
-    gap: 24
-  },
-  header: {
-    gap: 10,
-    marginTop: 10
-  },
-  title: {
-    fontSize: 28,
-    lineHeight: 34,
-    fontWeight: "800",
-    color: "#241F1A"
-  },
-  subtitle: {
-    fontSize: 15,
-    lineHeight: 22,
-    color: "#6B6257"
-  },
-  card: {
-    backgroundColor: "#FDF9F3",
-    borderRadius: 28,
-    padding: 18,
-    gap: 16,
-    borderWidth: 1,
-    borderColor: "#E7D7C8"
-  },
-  modeBlock: {
-    gap: 12
-  },
-  modeLabel: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#4E4339"
-  }
-});
+const createStyles = (colors: ReturnType<typeof useSettings>["theme"]["colors"]) =>
+  StyleSheet.create({
+    safe: {
+      flex: 1,
+      backgroundColor: colors.background
+    },
+    content: {
+      padding: 20,
+      gap: 24,
+      backgroundColor: colors.background
+    },
+    header: {
+      gap: 10,
+      marginTop: 10
+    },
+    title: {
+      fontSize: 28,
+      lineHeight: 34,
+      fontWeight: "800",
+      color: colors.text
+    },
+    subtitle: {
+      fontSize: 15,
+      lineHeight: 22,
+      color: colors.textSecondary
+    },
+    card: {
+      backgroundColor: colors.surface,
+      borderRadius: 28,
+      padding: 18,
+      gap: 16,
+      borderWidth: 1,
+      borderColor: colors.border
+    },
+    modeBlock: {
+      gap: 12
+    },
+    modeLabel: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: colors.textSecondary
+    }
+  });

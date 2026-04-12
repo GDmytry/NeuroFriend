@@ -17,7 +17,7 @@ import { MessageBubble } from "../components/MessageBubble";
 import { ModeSelector } from "../components/ModeSelector";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { useAuth } from "../contexts/AuthContext";
-import { useChat } from "../contexts/ChatContext";
+import { useChat } from "../contexts/ChatRuntimeContext";
 import { NeuralMode } from "../types";
 
 export function ChatScreen() {

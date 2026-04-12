@@ -1,5 +1,4 @@
 import { appConfig } from "../config/app";
-import { MODE_OPTIONS } from "../constants/modes";
 import { AiApiMessage, AiApiPayload, ChatAttachment, ChatMessage, NeuralMode } from "../types";
 
 type GenerateReplyParams = {
@@ -14,9 +13,14 @@ type RemoteAiResponse = {
   text?: string;
 };
 
-const MODE_TONE_MAP = Object.fromEntries(
-  MODE_OPTIONS.map((mode) => [mode.id, mode.promptHint])
-) as Record<NeuralMode, string>;
+const MODE_PROMPTS: Record<NeuralMode, string> = {
+  friend: "Отвечай тепло, просто и по-дружески, без лишней формальности.",
+  coach: "Отвечай структурно, поддерживающе и с фокусом на действия и цели.",
+  psychologist:
+    "Отвечай бережно, спокойно и эмпатично, без давления, диагнозов и категоричных выводов."
+};
+
+const MAX_ATTACHMENT_CONTEXT_PER_FILE = 3_000;
 
 function toApiRole(author: ChatMessage["author"]): AiApiMessage["role"] {
   if (author === "user") {
@@ -32,10 +36,10 @@ function toApiRole(author: ChatMessage["author"]): AiApiMessage["role"] {
 
 export function buildSystemPrompt(mode: NeuralMode) {
   return [
-    "Ты мобильный AI-ассистент внутри приложения Neuro Chat.",
+    "Ты AI-ассистент внутри мобильного приложения Neuro Chat.",
     "Отвечай на русском языке, если пользователь пишет по-русски.",
     "Сохраняй естественный диалоговый тон и не теряй контекст переписки.",
-    MODE_TONE_MAP[mode]
+    MODE_PROMPTS[mode]
   ].join(" ");
 }
 
@@ -68,25 +72,25 @@ function toApiContent(message: ChatMessage) {
 
 function buildUserMessageWithAttachments(text: string, attachments: ChatAttachment[]) {
   const intro = text.trim()
-    ? `Сообщение пользователя:\n${text.trim()}`
-    : "Пользователь отправил текстовые файлы без отдельного комментария.";
+    ? `Комментарий пользователя:\n${text.trim()}`
+    : "Пользователь отправил только текстовые файлы без отдельного комментария.";
 
-  const filesBlock = attachments
+  const compactFilesBlock = attachments
     .map((attachment, index) =>
       [
         `[Файл ${index + 1}] ${attachment.name}`,
         `Тип: ${attachment.mimeType || "text/plain"}`,
-        `Размер: ${attachment.size || attachment.textContent.length} байт`,
         "Содержимое:",
-        attachment.textContent
+        attachment.textContent.slice(0, MAX_ATTACHMENT_CONTEXT_PER_FILE)
       ].join("\n")
     )
     .join("\n\n");
 
   return [
     intro,
-    "Пользователь приложил файлы. Используй их содержимое как важный контекст для ответа.",
-    filesBlock
+    "Ниже приложены текстовые файлы. Используй их как основной контекст для ответа.",
+    "Если пользователь просит пересказ или анализ файла, ответь кратко и по существу, без длинных вступлений.",
+    compactFilesBlock
   ].join("\n\n");
 }
 
@@ -136,7 +140,7 @@ function toUserFacingRemoteAiError(message: string) {
   }
 
   if (message.includes("timed out")) {
-    return "Сервер AI не ответил вовремя. Проверьте, что телефон и компьютер в одной сети, порт 3001 доступен, а Ollama успевает ответить.";
+    return "Сервер AI не ответил вовремя. Если вы прикрепили файл, попробуйте меньший текст или разделите его на части.";
   }
 
   if (message.includes("Network request failed")) {
@@ -165,36 +169,14 @@ async function readRemoteErrorMessage(response: Response) {
   }
 }
 
-function buildMockReply({ mode, history, latestUserMessage }: GenerateReplyParams): string {
-  const modeLabel = MODE_OPTIONS.find((item) => item.id === mode)?.title ?? mode;
-  const previousUserMessages = history.filter((message) => message.author === "user").length;
-  const trimmed = latestUserMessage.trim();
-
-  const intros: Record<NeuralMode, string> = {
-    friend: "Я рядом и постараюсь ответить по-дружески.",
-    coach: "Давай разложим ситуацию по шагам и посмотрим, что можно сделать дальше.",
-    psychologist: "Давай бережно разберём, что с тобой происходит."
+function buildMockReply({ mode, latestUserMessage }: GenerateReplyParams): string {
+  const modeOpeners: Record<NeuralMode, string> = {
+    friend: "Я рядом и отвечу по-дружески.",
+    coach: "Давайте разложим это на понятные шаги.",
+    psychologist: "Давайте спокойно и бережно разберем, что с вами происходит."
   };
 
-  const reflections: Record<NeuralMode, string> = {
-    friend: `Похоже, для тебя это действительно важно: "${trimmed}".`,
-    coach: `Твой запрос звучит так: "${trimmed}". Уже в этом есть хорошая точка для движения.`,
-    psychologist: `Я слышу в твоих словах значимую для тебя тему: "${trimmed}".`
-  };
-
-  const followUps: Record<NeuralMode, string> = {
-    friend: "Если хочешь, можем спокойно продолжить и разобрать это без формальностей.",
-    coach: "Если готов, следующим сообщением можем превратить это в понятный план действий.",
-    psychologist:
-      "Если тебе комфортно, расскажи, что в этой ситуации ощущается самым тяжёлым прямо сейчас."
-  };
-
-  const contextLine =
-    previousUserMessages > 1
-      ? `Я помню контекст переписки и продолжаю разговор в режиме "${modeLabel}".`
-      : `Это начало диалога в режиме "${modeLabel}", поэтому задам спокойный и понятный тон разговору.`;
-
-  return [intros[mode], MODE_TONE_MAP[mode], reflections[mode], contextLine, followUps[mode]].join(
+  return [modeOpeners[mode], MODE_PROMPTS[mode], `Ваш запрос: "${latestUserMessage.trim()}".`].join(
     " "
   );
 }

@@ -1,6 +1,7 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
+import { useSettings } from "../contexts/SettingsContext";
 import { MODE_OPTIONS } from "../constants/modes";
 import { NeuralMode } from "../types";
 
@@ -10,6 +11,9 @@ type Props = {
 };
 
 export function ModeSelector({ value, onChange }: Props) {
+  const { theme } = useSettings();
+  const styles = useMemo(() => createStyles(theme.colors), [theme.colors]);
+
   return (
     <View style={styles.container}>
       {MODE_OPTIONS.map((mode) => {
@@ -32,36 +36,37 @@ export function ModeSelector({ value, onChange }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    gap: 10
-  },
-  card: {
-    borderRadius: 20,
-    padding: 16,
-    backgroundColor: "#FFFDF9",
-    borderWidth: 1,
-    borderColor: "#E6D4C4"
-  },
-  activeCard: {
-    backgroundColor: "#F4E1D0",
-    borderColor: "#B96D40"
-  },
-  title: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#2A241E"
-  },
-  subtitle: {
-    marginTop: 4,
-    fontSize: 13,
-    color: "#6C6257",
-    lineHeight: 18
-  },
-  activeTitle: {
-    color: "#7D4A29"
-  },
-  activeSubtitle: {
-    color: "#7D4A29"
-  }
-});
+const createStyles = (colors: ReturnType<typeof useSettings>["theme"]["colors"]) =>
+  StyleSheet.create({
+    container: {
+      gap: 10
+    },
+    card: {
+      borderRadius: 20,
+      padding: 16,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border
+    },
+    activeCard: {
+      backgroundColor: colors.primarySoft,
+      borderColor: colors.primary
+    },
+    title: {
+      fontSize: 16,
+      fontWeight: "700",
+      color: colors.text
+    },
+    subtitle: {
+      marginTop: 4,
+      fontSize: 13,
+      color: colors.textSecondary,
+      lineHeight: 18
+    },
+    activeTitle: {
+      color: colors.primary
+    },
+    activeSubtitle: {
+      color: colors.primary
+    }
+  });

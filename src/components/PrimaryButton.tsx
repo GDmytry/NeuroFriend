@@ -1,12 +1,14 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text } from "react-native";
+
+import { useSettings } from "../contexts/SettingsContext";
 
 type Props = {
   title: string;
   onPress: () => void;
   disabled?: boolean;
   loading?: boolean;
-  variant?: "solid" | "ghost";
+  variant?: "solid" | "ghost" | "danger";
 };
 
 export function PrimaryButton({
@@ -16,7 +18,10 @@ export function PrimaryButton({
   loading,
   variant = "solid"
 }: Props) {
+  const { theme } = useSettings();
+  const styles = useMemo(() => createStyles(theme.colors), [theme.colors]);
   const ghost = variant === "ghost";
+  const danger = variant === "danger";
 
   return (
     <Pressable
@@ -24,49 +29,63 @@ export function PrimaryButton({
       disabled={disabled || loading}
       style={({ pressed }) => [
         styles.button,
-        ghost ? styles.ghostButton : styles.solidButton,
+        ghost ? styles.ghostButton : danger ? styles.dangerButton : styles.solidButton,
         (disabled || loading) && styles.disabled,
         pressed && !disabled ? styles.pressed : null
       ]}
     >
       {loading ? (
-        <ActivityIndicator color={ghost ? "#B96D40" : "#FFF"} />
+        <ActivityIndicator color={ghost ? theme.colors.primary : theme.colors.primaryContrast} />
       ) : (
-        <Text style={[styles.text, ghost ? styles.ghostText : styles.solidText]}>{title}</Text>
+        <Text
+          style={[
+            styles.text,
+            ghost ? styles.ghostText : danger ? styles.dangerText : styles.solidText
+          ]}
+        >
+          {title}
+        </Text>
       )}
     </Pressable>
   );
 }
 
-const styles = StyleSheet.create({
-  button: {
-    minHeight: 54,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center"
-  },
-  solidButton: {
-    backgroundColor: "#B96D40"
-  },
-  ghostButton: {
-    backgroundColor: "#F3E4D5",
-    borderWidth: 1,
-    borderColor: "#D8C2AE"
-  },
-  solidText: {
-    color: "#FFF"
-  },
-  ghostText: {
-    color: "#7D4A29"
-  },
-  text: {
-    fontSize: 16,
-    fontWeight: "700"
-  },
-  disabled: {
-    opacity: 0.7
-  },
-  pressed: {
-    transform: [{ scale: 0.99 }]
-  }
-});
+const createStyles = (colors: ReturnType<typeof useSettings>["theme"]["colors"]) =>
+  StyleSheet.create({
+    button: {
+      minHeight: 54,
+      borderRadius: 18,
+      alignItems: "center",
+      justifyContent: "center"
+    },
+    solidButton: {
+      backgroundColor: colors.primary
+    },
+    ghostButton: {
+      backgroundColor: colors.surfaceMuted,
+      borderWidth: 1,
+      borderColor: colors.borderStrong
+    },
+    dangerButton: {
+      backgroundColor: colors.danger
+    },
+    solidText: {
+      color: colors.primaryContrast
+    },
+    ghostText: {
+      color: colors.primary
+    },
+    dangerText: {
+      color: colors.primaryContrast
+    },
+    text: {
+      fontSize: 16,
+      fontWeight: "700"
+    },
+    disabled: {
+      opacity: 0.7
+    },
+    pressed: {
+      transform: [{ scale: 0.99 }]
+    }
+  });

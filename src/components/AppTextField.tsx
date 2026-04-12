@@ -1,5 +1,7 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { StyleSheet, Text, TextInput, TextInputProps, View } from "react-native";
+
+import { useSettings } from "../contexts/SettingsContext";
 
 type Props = TextInputProps & {
   label: string;
@@ -7,11 +9,14 @@ type Props = TextInputProps & {
 };
 
 export function AppTextField({ label, error, style, ...props }: Props) {
+  const { theme } = useSettings();
+  const styles = useMemo(() => createStyles(theme.colors), [theme.colors]);
+
   return (
     <View style={styles.wrapper}>
       <Text style={styles.label}>{label}</Text>
       <TextInput
-        placeholderTextColor="#8A7F73"
+        placeholderTextColor={theme.colors.inputPlaceholder}
         style={[styles.input, style]}
         {...props}
       />
@@ -20,27 +25,28 @@ export function AppTextField({ label, error, style, ...props }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  wrapper: {
-    gap: 8
-  },
-  label: {
-    fontSize: 14,
-    color: "#4E4339",
-    fontWeight: "600"
-  },
-  input: {
-    minHeight: 54,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: "#D8C2AE",
-    backgroundColor: "#FFFDF9",
-    paddingHorizontal: 16,
-    fontSize: 16,
-    color: "#1E1B18"
-  },
-  error: {
-    fontSize: 13,
-    color: "#A1462F"
-  }
-});
+const createStyles = (colors: ReturnType<typeof useSettings>["theme"]["colors"]) =>
+  StyleSheet.create({
+    wrapper: {
+      gap: 8
+    },
+    label: {
+      fontSize: 14,
+      color: colors.textSecondary,
+      fontWeight: "600"
+    },
+    input: {
+      minHeight: 54,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      backgroundColor: colors.inputBackground,
+      paddingHorizontal: 16,
+      fontSize: 16,
+      color: colors.text
+    },
+    error: {
+      fontSize: 13,
+      color: colors.danger
+    }
+  });

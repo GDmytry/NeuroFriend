@@ -4,7 +4,7 @@
     "slug": "neuro-chat-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "jsEngine": "hermes",
     "splash": {
       "backgroundColor": "#F7F3EC"
@@ -16,9 +16,9 @@
       "package": "com.codex.neurochat"
     },
     "extra": {
-      "useMockAi": true,
-      "aiApiUrl": "",
-      "aiApiKey": ""
+      "useMockAi": false,
+      "aiApiUrl": "http://192.168.3.145:3001/chat",
+      "aiApiKey": "b187155b9584417abcdc34919d66cfd5"
     }
   }
 }

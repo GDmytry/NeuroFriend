@@ -1,14 +1,26 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-import { AuthSession, ChatThread, NeuralMode, User } from "../types";
+import {
+  AppSettings,
+  AuthSession,
+  ChatAttachment,
+  ChatMessage,
+  ChatThread,
+  NeuralMode,
+  User
+} from "../types";
 
 const KEYS = {
   users: "neuro-chat/users",
   session: "neuro-chat/session",
-  chats: "neuro-chat/chats"
+  chats: "neuro-chat/chats",
+  settings: "neuro-chat/settings"
 } as const;
 
 const DEFAULT_MODE: NeuralMode = "friend";
+const DEFAULT_SETTINGS: AppSettings = {
+  themePreference: "system"
+};
 
 async function readJson<T>(key: string, fallback: T): Promise<T> {
   const raw = await AsyncStorage.getItem(key);
@@ -34,11 +46,39 @@ function normalizeUser(user: User): User {
   };
 }
 
+function normalizeAttachment(attachment: ChatAttachment): ChatAttachment {
+  return {
+    id: attachment.id,
+    name: attachment.name ?? "text-file.txt",
+    uri: attachment.uri ?? "",
+    mimeType: attachment.mimeType ?? "text/plain",
+    size: typeof attachment.size === "number" ? attachment.size : 0,
+    textContent: typeof attachment.textContent === "string" ? attachment.textContent : ""
+  };
+}
+
+function normalizeMessage(message: ChatMessage): ChatMessage {
+  return {
+    ...message,
+    text: typeof message.text === "string" ? message.text : "",
+    attachments: Array.isArray(message.attachments)
+      ? message.attachments.map(normalizeAttachment)
+      : []
+  };
+}
+
 function normalizeThread(thread: ChatThread): ChatThread {
   return {
     ...thread,
     mode: thread.mode ?? DEFAULT_MODE,
-    messages: Array.isArray(thread.messages) ? thread.messages : []
+    messages: Array.isArray(thread.messages) ? thread.messages.map(normalizeMessage) : []
+  };
+}
+
+function normalizeSettings(settings: AppSettings | null | undefined): AppSettings {
+  return {
+    ...DEFAULT_SETTINGS,
+    ...(settings ?? {})
   };
 }
 
@@ -57,5 +97,10 @@ export const storage = {
     const threads = await readJson<ChatThread[]>(KEYS.chats, []);
     return threads.map(normalizeThread);
   },
-  saveThreads: (threads: ChatThread[]) => writeJson(KEYS.chats, threads)
+  saveThreads: (threads: ChatThread[]) => writeJson(KEYS.chats, threads),
+  getSettings: async () => {
+    const settings = await readJson<AppSettings | null>(KEYS.settings, null);
+    return normalizeSettings(settings);
+  },
+  saveSettings: (settings: AppSettings) => writeJson(KEYS.settings, normalizeSettings(settings))
 };
