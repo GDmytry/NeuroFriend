@@ -17,7 +17,7 @@
     },
     "extra": {
       "useMockAi": false,
-      "aiApiUrl": "http://192.168.3.145:3001/chat",
+      "aiApiUrl": "https://nelinux.taildbcf93.ts.net/chat",
       "aiApiKey": "b187155b9584417abcdc34919d66cfd5"
     }
   }

@@ -1,8 +1,7 @@
 import React, { useMemo } from "react";
 import { StyleSheet, Text, View, ViewStyle } from "react-native";
 
-import { useSettings } from "../../contexts/SettingsContext";
-import { getNeuroPalette } from "../../theme/neuroFriend";
+import { NEURO_OUTLINE_FONT } from "../../theme/fonts";
 
 type Props = {
   text: string;
@@ -19,45 +18,77 @@ export function OutlinedTitle({
   align = "center",
   style
 }: Props) {
-  const { theme } = useSettings();
-  const palette = getNeuroPalette(theme);
+  const containerStyle = useMemo(
+    () => ({
+      alignSelf: align === "center" ? ("center" as const) : ("flex-start" as const)
+    }),
+    [align]
+  );
   const textStyle = useMemo(
     () => ({
       fontSize: size,
       lineHeight: Math.round(size * 1.08),
-      fontStyle: italic ? ("italic" as const) : ("normal" as const),
       textAlign: align,
-      color: palette.panel,
-      fontWeight: "900" as const
+      color: "#FFFFFF",
+      fontFamily: NEURO_OUTLINE_FONT,
+      includeFontPadding: false as const
     }),
-    [align, italic, palette.panel, size]
+    [align, size]
+  );
+  const outlineLayers = useMemo(
+    () => [
+      { x: -3, y: 0 },
+      { x: 3, y: 0 },
+      { x: 0, y: -3 },
+      { x: 0, y: 3 },
+      { x: -2, y: -2 },
+      { x: 2, y: -2 },
+      { x: -2, y: 2 },
+      { x: 2, y: 2 },
+      { x: -3, y: -1 },
+      { x: 3, y: -1 },
+      { x: -3, y: 1 },
+      { x: 3, y: 1 }
+    ],
+    []
   );
 
   return (
-    <View style={style}>
-      <Text style={[styles.shadowText, textStyle, { color: palette.outline, left: -1, top: -1 }]}>
-        {text}
-      </Text>
-      <Text style={[styles.shadowText, textStyle, { color: palette.outline, left: 1, top: -1 }]}>
-        {text}
-      </Text>
-      <Text style={[styles.shadowText, textStyle, { color: palette.outline, left: -1, top: 1 }]}>
-        {text}
-      </Text>
-      <Text style={[styles.shadowText, textStyle, { color: palette.outline, left: 1, top: 1 }]}>
-        {text}
-      </Text>
+    <View style={[styles.wrapper, containerStyle, style]}>
+      {outlineLayers.map((layer) => (
+        <Text
+          key={`${layer.x}:${layer.y}`}
+          style={[
+            styles.outlineText,
+            textStyle,
+            {
+              color: "#000000",
+              transform: [{ translateX: layer.x }, { translateY: layer.y }]
+            }
+          ]}
+        >
+          {text}
+        </Text>
+      ))}
       <Text style={[textStyle, styles.mainText]}>{text}</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  mainText: {
-    position: "relative"
+  wrapper: {
+    position: "relative",
+    paddingHorizontal: 3,
+    paddingVertical: 3
   },
-  shadowText: {
+  mainText: {
+    position: "relative",
+    zIndex: 2
+  },
+  outlineText: {
     position: "absolute",
-    right: 0
+    top: 0,
+    left: 0,
+    zIndex: 1
   }
 });
