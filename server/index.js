@@ -99,14 +99,18 @@ async function handleHealth(response) {
     const modelNames = Array.isArray(tagsPayload.models)
       ? tagsPayload.models.map((item) => item.name)
       : [];
+    const modelAvailable = modelNames.includes(config.ollamaModel);
 
     sendJson(response, 200, {
-      ok: true,
+      ok: modelAvailable,
       ollamaReachable: true,
       ollamaBaseUrl: config.ollamaBaseUrl,
       ollamaModel: config.ollamaModel,
-      modelAvailable: modelNames.includes(config.ollamaModel),
-      installedModels: modelNames
+      modelAvailable,
+      installedModels: modelNames,
+      error: modelAvailable
+        ? null
+        : `Model "${config.ollamaModel}" is not installed or not visible to Ollama`
     });
   } catch (error) {
     sendJson(response, 503, {
