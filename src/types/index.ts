@@ -7,6 +7,7 @@ export type User = {
   email: string;
   password: string;
   preferredMode: NeuralMode;
+  assistantName: string;
   createdAt: string;
 };
 
@@ -48,6 +49,7 @@ export type RegisteredUserInput = {
   email: string;
   password: string;
   preferredMode: NeuralMode;
+  assistantName: string;
 };
 
 export type LoginInput = {
@@ -77,4 +79,7 @@ export type AiApiPayload = {
 
 export type AppSettings = {
   themePreference: ThemePreference;
+  remoteAiEnabled: boolean;
+  remoteAiUrl: string;
+  remoteAiKey: string;
 };

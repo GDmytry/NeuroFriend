@@ -4,7 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useSettings } from "../contexts/SettingsContext";
 import { ConversationWorkspaceScreen } from "./ConversationWorkspaceScreen";
-import { SettingsScreen } from "./SettingsScreen";
+import { SettingsWorkspaceScreen } from "./SettingsWorkspaceScreen";
 import { ThreadsScreen } from "./ThreadsScreen";
 
 type HomeTab = "chat" | "threads" | "settings";
@@ -26,7 +26,7 @@ export function MainScreen() {
         {activeTab === "chat" ? null : activeTab === "threads" ? (
           <ThreadsScreen onOpenChat={() => setActiveTab("chat")} />
         ) : (
-          <SettingsScreen />
+          <SettingsWorkspaceScreen />
         )}
         {activeTab === "chat" ? <ConversationWorkspaceScreen /> : null}
       </View>

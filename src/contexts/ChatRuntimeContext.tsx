@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 
-import { generateAssistantReply } from "../services/aiRuntimeService";
+import { generateAssistantReply } from "../services/neuroAiService";
 import { storage } from "../services/storage";
 import {
   ChatAttachment,
@@ -23,6 +23,7 @@ type ChatContextValue = {
   startNewChat: () => void;
   sendMessage: (input: SendMessageInput) => Promise<string>;
   deleteThread: (threadId: string) => Promise<void>;
+  renameThread: (threadId: string, title: string) => Promise<void>;
   getThreadById: (threadId: string) => ChatThread | undefined;
 };
 
@@ -146,6 +147,18 @@ export function ChatProvider({ children, currentUser }: ChatProviderProps) {
         setSelectedMode(currentUser?.preferredMode ?? "friend");
       },
       getThreadById: (threadId) => threads.find((thread) => thread.id === threadId),
+      renameThread: async (threadId, title) => {
+        const normalizedTitle = title.trim();
+
+        if (!normalizedTitle) {
+          throw new Error("Название чата не может быть пустым");
+        }
+
+        const nextThreads = allThreads.map((thread) =>
+          thread.id === threadId ? { ...thread, title: normalizedTitle } : thread
+        );
+        await persist(nextThreads);
+      },
       deleteThread: async (threadId) => {
         const nextThreads = allThreads.filter((thread) => thread.id !== threadId);
         await persist(nextThreads);
@@ -203,7 +216,8 @@ export function ChatProvider({ children, currentUser }: ChatProviderProps) {
         const assistantText = await generateAssistantReply({
           mode,
           history: nextHistory,
-          latestUserMessage: visibleText
+          latestUserMessage: visibleText,
+          assistantName: currentUser.assistantName
         });
 
         const assistantMessage: ChatMessage = {

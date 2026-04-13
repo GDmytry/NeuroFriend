@@ -21,17 +21,24 @@ export function RegisterScreen() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [assistantName, setAssistantName] = useState("NeuroFriend");
   const [loading, setLoading] = useState(false);
 
   async function handleRegister() {
-    if (!name.trim() || !email.trim() || !password.trim()) {
-      Alert.alert("Проверьте поля", "Заполните имя, email и пароль");
+    if (!name.trim() || !email.trim() || !password.trim() || !assistantName.trim()) {
+      Alert.alert("Проверьте поля", "Заполните имя, email, пароль и имя нейросети");
       return;
     }
 
     try {
       setLoading(true);
-      await register({ name, email, password, preferredMode: selectedMode });
+      await register({
+        name,
+        email,
+        password,
+        preferredMode: selectedMode,
+        assistantName
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Не удалось зарегистрироваться";
       Alert.alert("Ошибка регистрации", message);
@@ -75,6 +82,12 @@ export function RegisterScreen() {
             onChangeText={setPassword}
             secureTextEntry
             placeholder="Минимум 6 символов"
+          />
+          <AppTextField
+            label="Имя нейросети"
+            value={assistantName}
+            onChangeText={setAssistantName}
+            placeholder="Например, NeuroFriend"
           />
 
           <View style={styles.modeBlock}>

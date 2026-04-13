@@ -24,6 +24,7 @@ export function SignUpScreen() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [assistantName, setAssistantName] = useState("NeuroFriend");
   const [loading, setLoading] = useState(false);
 
   async function handleRegister() {
@@ -34,7 +35,13 @@ export function SignUpScreen() {
 
     try {
       setLoading(true);
-      await register({ name, email, password, preferredMode: selectedMode });
+      await register({
+        name,
+        email,
+        password,
+        preferredMode: selectedMode,
+        assistantName
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Не удалось зарегистрироваться";
       Alert.alert("Ошибка регистрации", message);

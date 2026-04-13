@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
+import { appConfig } from "../config/app";
 import {
   AppSettings,
   AuthSession,
@@ -19,7 +20,10 @@ const KEYS = {
 
 const DEFAULT_MODE: NeuralMode = "friend";
 const DEFAULT_SETTINGS: AppSettings = {
-  themePreference: "system"
+  themePreference: "system",
+  remoteAiEnabled: appConfig.hasRemoteAi && !appConfig.useMockAi,
+  remoteAiUrl: appConfig.aiApiUrl,
+  remoteAiKey: appConfig.aiApiKey
 };
 
 async function readJson<T>(key: string, fallback: T): Promise<T> {
@@ -42,7 +46,11 @@ async function writeJson<T>(key: string, value: T) {
 function normalizeUser(user: User): User {
   return {
     ...user,
-    preferredMode: user.preferredMode ?? DEFAULT_MODE
+    preferredMode: user.preferredMode ?? DEFAULT_MODE,
+    assistantName:
+      typeof user.assistantName === "string" && user.assistantName.trim()
+        ? user.assistantName.trim()
+        : "NeuroFriend"
   };
 }
 

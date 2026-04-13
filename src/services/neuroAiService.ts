@@ -1,11 +1,12 @@
 import { appConfig } from "../config/app";
-import { storage } from "../services/storage";
+import { storage } from "./storage";
 import { AiApiMessage, AiApiPayload, ChatAttachment, ChatMessage, NeuralMode } from "../types";
 
 type GenerateReplyParams = {
   mode: NeuralMode;
   history: ChatMessage[];
   latestUserMessage: string;
+  assistantName: string;
 };
 
 type RemoteAiResponse = {
@@ -35,9 +36,10 @@ function toApiRole(author: ChatMessage["author"]): AiApiMessage["role"] {
   return "system";
 }
 
-export function buildSystemPrompt(mode: NeuralMode) {
+export function buildSystemPrompt(mode: NeuralMode, assistantName: string) {
   return [
-    "Ты AI-ассистент внутри мобильного приложения Neuro Chat.",
+    `Твое имя: ${assistantName}. Представляйся именно так, если пользователь спросит, как тебя зовут.`,
+    "Ты AI-ассистент внутри мобильного приложения NeuroFriend.",
     "Отвечай на русском языке, если пользователь пишет по-русски.",
     "Сохраняй естественный диалоговый тон и не теряй контекст переписки.",
     MODE_PROMPTS[mode]
@@ -46,9 +48,10 @@ export function buildSystemPrompt(mode: NeuralMode) {
 
 export function buildAiPayload({
   mode,
-  history
-}: Pick<GenerateReplyParams, "mode" | "history">): AiApiPayload {
-  const systemPrompt = buildSystemPrompt(mode);
+  history,
+  assistantName
+}: Pick<GenerateReplyParams, "mode" | "history" | "assistantName">): AiApiPayload {
+  const systemPrompt = buildSystemPrompt(mode, assistantName);
 
   return {
     mode,
@@ -95,6 +98,23 @@ function buildUserMessageWithAttachments(text: string, attachments: ChatAttachme
   ].join("\n\n");
 }
 
+async function getRuntimeAiConfig() {
+  const settings = await storage.getSettings();
+  const aiApiUrl = normalizeString(settings.remoteAiUrl || appConfig.aiApiUrl);
+  const aiApiKey = normalizeString(settings.remoteAiKey || appConfig.aiApiKey);
+  const remoteAiEnabled =
+    typeof settings.remoteAiEnabled === "boolean"
+      ? settings.remoteAiEnabled
+      : appConfig.hasRemoteAi && !appConfig.useMockAi;
+
+  return {
+    aiApiUrl,
+    aiApiKey,
+    useMockAi: !remoteAiEnabled,
+    hasRemoteAi: remoteAiEnabled && aiApiUrl.length > 0
+  };
+}
+
 async function getRemoteAssistantReply(payload: AiApiPayload) {
   const runtimeConfig = await getRuntimeAiConfig();
 
@@ -123,7 +143,9 @@ async function getRemoteAssistantReply(payload: AiApiPayload) {
         );
       }
 
-      throw new Error(`AI API returned ${response.status}${errorDetails ? `: ${errorDetails}` : ""}`);
+      throw new Error(
+        `AI API returned ${response.status}${errorDetails ? `: ${errorDetails}` : ""}`
+      );
     }
 
     const data = (await response.json()) as RemoteAiResponse;
@@ -137,7 +159,7 @@ async function getRemoteAssistantReply(payload: AiApiPayload) {
 
 function toUserFacingRemoteAiError(message: string) {
   if (message.includes("401")) {
-    return "Сервер AI отклонил запрос. Проверьте aiApiKey в app.json и CHAT_SERVER_API_KEY в server/.env.";
+    return "Сервер AI отклонил запрос. Проверьте aiApiKey в настройках приложения и CHAT_SERVER_API_KEY на сервере.";
   }
 
   if (message.includes("ECONNREFUSED") || message.includes("fetch failed")) {
@@ -149,7 +171,7 @@ function toUserFacingRemoteAiError(message: string) {
   }
 
   if (message.includes("Network request failed")) {
-    return "Приложение не может подключиться к серверу AI. Проверьте IP-адрес в app.json, Wi-Fi и Windows Firewall.";
+    return "Приложение не может подключиться к серверу AI. Проверьте публичный HTTPS-адрес, токен и доступность туннеля.";
   }
 
   return `Ошибка подключения к AI: ${message}`;
@@ -174,11 +196,11 @@ async function readRemoteErrorMessage(response: Response) {
   }
 }
 
-function buildMockReply({ mode, latestUserMessage }: GenerateReplyParams): string {
+function buildMockReply({ mode, latestUserMessage, assistantName }: GenerateReplyParams): string {
   const modeOpeners: Record<NeuralMode, string> = {
-    friend: "Я рядом и отвечу по-дружески.",
-    coach: "Давайте разложим это на понятные шаги.",
-    psychologist: "Давайте спокойно и бережно разберем, что с вами происходит."
+    friend: `${assistantName} рядом и отвечает по-дружески.`,
+    coach: `${assistantName} поможет разложить это на понятные шаги.`,
+    psychologist: `${assistantName} бережно поможет разобраться в ситуации.`
   };
 
   return [modeOpeners[mode], MODE_PROMPTS[mode], `Ваш запрос: "${latestUserMessage.trim()}".`].join(
@@ -189,38 +211,24 @@ function buildMockReply({ mode, latestUserMessage }: GenerateReplyParams): strin
 export async function generateAssistantReply({
   mode,
   history,
-  latestUserMessage
+  latestUserMessage,
+  assistantName
 }: GenerateReplyParams): Promise<string> {
   const runtimeConfig = await getRuntimeAiConfig();
 
   if (runtimeConfig.useMockAi || !runtimeConfig.hasRemoteAi) {
-    return buildMockReply({ mode, history, latestUserMessage });
+    return buildMockReply({ mode, history, latestUserMessage, assistantName });
   }
 
-  const remoteReply = await getRemoteAssistantReply(buildAiPayload({ mode, history }));
+  const remoteReply = await getRemoteAssistantReply(
+    buildAiPayload({ mode, history, assistantName })
+  );
 
   if (!remoteReply) {
     throw new Error("AI сервер вернул пустой ответ.");
   }
 
   return remoteReply;
-}
-
-async function getRuntimeAiConfig() {
-  const settings = await storage.getSettings();
-  const aiApiUrl = normalizeString(settings.remoteAiUrl || appConfig.aiApiUrl);
-  const aiApiKey = normalizeString(settings.remoteAiKey || appConfig.aiApiKey);
-  const remoteAiEnabled =
-    typeof settings.remoteAiEnabled === "boolean"
-      ? settings.remoteAiEnabled
-      : appConfig.hasRemoteAi && !appConfig.useMockAi;
-
-  return {
-    aiApiUrl,
-    aiApiKey,
-    useMockAi: !remoteAiEnabled,
-    hasRemoteAi: remoteAiEnabled && aiApiUrl.length > 0
-  };
 }
 
 function normalizeString(value: unknown) {

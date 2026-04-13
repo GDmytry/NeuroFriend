@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { useColorScheme } from "react-native";
 
+import { appConfig } from "../config/app";
 import { storage } from "../services/storage";
 import { AppSettings, ThemePreference } from "../types";
 import { AppTheme, getAppTheme } from "../theme";
@@ -12,10 +13,18 @@ type SettingsContextValue = {
   resolvedTheme: AppTheme["mode"];
   theme: AppTheme;
   setThemePreference: (value: ThemePreference) => Promise<void>;
+  setRemoteAiConfig: (value: {
+    remoteAiEnabled: boolean;
+    remoteAiUrl: string;
+    remoteAiKey: string;
+  }) => Promise<void>;
 };
 
 const defaultSettings: AppSettings = {
-  themePreference: "system"
+  themePreference: "system",
+  remoteAiEnabled: appConfig.hasRemoteAi && !appConfig.useMockAi,
+  remoteAiUrl: appConfig.aiApiUrl,
+  remoteAiKey: appConfig.aiApiKey
 };
 
 const SettingsContext = createContext<SettingsContextValue | undefined>(undefined);
@@ -55,6 +64,17 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         const nextSettings: AppSettings = {
           ...settings,
           themePreference: value
+        };
+
+        setSettings(nextSettings);
+        await storage.saveSettings(nextSettings);
+      },
+      setRemoteAiConfig: async (value) => {
+        const nextSettings: AppSettings = {
+          ...settings,
+          remoteAiEnabled: value.remoteAiEnabled,
+          remoteAiUrl: value.remoteAiUrl.trim(),
+          remoteAiKey: value.remoteAiKey.trim()
         };
 
         setSettings(nextSettings);

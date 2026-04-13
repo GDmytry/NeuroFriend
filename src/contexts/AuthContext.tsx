@@ -11,6 +11,7 @@ type AuthContextValue = {
   register: (input: RegisteredUserInput) => Promise<void>;
   logout: () => Promise<void>;
   updatePreferredMode: (mode: NeuralMode) => Promise<void>;
+  updateAssistantName: (assistantName: string) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -57,7 +58,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await storage.saveSession({ userId: user.id });
         setCurrentUser(user);
       },
-      register: async ({ name, email, password, preferredMode }) => {
+      register: async ({ name, email, password, preferredMode, assistantName }) => {
         const users = await storage.getUsers();
         const normalizedEmail = email.trim().toLowerCase();
         const exists = users.some((item) => item.email === normalizedEmail);
@@ -76,6 +77,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           email: normalizedEmail,
           password,
           preferredMode,
+          assistantName: assistantName.trim() || "NeuroFriend",
           createdAt: new Date().toISOString()
         };
 
@@ -96,6 +98,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const users = await storage.getUsers();
         const nextUsers = users.map((user) =>
           user.id === currentUser.id ? { ...user, preferredMode: mode } : user
+        );
+        const nextCurrentUser = nextUsers.find((user) => user.id === currentUser.id) ?? null;
+
+        await storage.saveUsers(nextUsers);
+        setCurrentUser(nextCurrentUser);
+      },
+      updateAssistantName: async (assistantName) => {
+        if (!currentUser) {
+          return;
+        }
+
+        const normalizedAssistantName = assistantName.trim();
+
+        if (!normalizedAssistantName) {
+          throw new Error("Имя нейросети не может быть пустым");
+        }
+
+        const users = await storage.getUsers();
+        const nextUsers = users.map((user) =>
+          user.id === currentUser.id ? { ...user, assistantName: normalizedAssistantName } : user
         );
         const nextCurrentUser = nextUsers.find((user) => user.id === currentUser.id) ?? null;
 
