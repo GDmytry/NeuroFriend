@@ -26,6 +26,43 @@ npm run web
 npm run typecheck
 ```
 
+## Запуск на iPhone через Xcode
+
+В проект уже добавлен нативный iOS-проект в папке `ios/`, так что приложение можно запускать напрямую из Xcode.
+
+1. Установи JS-зависимости:
+
+```bash
+npm install
+```
+
+2. Если после изменения нативных зависимостей или Expo-конфига нужно пересобрать iOS-проект:
+
+```bash
+npx expo prebuild --platform ios
+cd ios
+pod install --repo-update
+cd ..
+```
+
+3. Открой workspace в Xcode:
+
+```bash
+open ios/NeuroChat.xcworkspace
+```
+
+4. В Xcode открой `Targets` -> `NeuroChat` -> `Signing & Capabilities` и выбери свой `Team`.
+
+5. Подключи iPhone, выбери его в списке устройств и нажми `Run`.
+
+Если Xcode попросит доверить сертификат или устройство, подтверди это на Mac и на iPhone.
+
+Важно:
+
+- открывай именно `ios/NeuroChat.xcworkspace`, а не `.xcodeproj`;
+- после добавления новых React Native / Expo библиотек снова запускай `pod install`;
+- для первого запуска на реальном устройстве нужен твой Apple Developer Team в настройках подписи.
+
 ## Как позже подключить реальный AI
 
 Откройте `app.json` и заполните значения в `expo.extra`:
