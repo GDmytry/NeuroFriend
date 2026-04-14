@@ -35,39 +35,26 @@ const THEME_OPTIONS: Array<{
   { id: "light", title: "Светлая" }
 ];
 
-export function SettingsExperienceScreen({ navigation }: Props) {
-  const {
-    theme,
-    themePreference,
-    settings,
-    setThemePreference,
-    setRemoteAiConfig
-  } = useSettings();
+export function SettingsAppScreen({ navigation }: Props) {
+  const { theme, themePreference, setThemePreference } = useSettings();
   const { currentUser, logout, updateAssistantName } = useAuth();
   const { threads } = useChat();
   const palette = getNeuroPalette(theme);
   const styles = useMemo(() => createStyles(palette), [palette]);
   const [assistantName, setAssistantName] = useState(currentUser?.assistantName ?? "");
-  const [remoteAiEnabled, setRemoteAiEnabled] = useState(settings.remoteAiEnabled);
-  const [remoteAiUrl, setRemoteAiUrl] = useState(settings.remoteAiUrl);
-  const [remoteAiKey, setRemoteAiKey] = useState(settings.remoteAiKey);
   const [savingAssistant, setSavingAssistant] = useState(false);
-  const [savingAi, setSavingAi] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
     setAssistantName(currentUser?.assistantName ?? "");
   }, [currentUser?.assistantName]);
 
-  useEffect(() => {
-    setRemoteAiEnabled(settings.remoteAiEnabled);
-    setRemoteAiUrl(settings.remoteAiUrl);
-    setRemoteAiKey(settings.remoteAiKey);
-  }, [settings.remoteAiEnabled, settings.remoteAiKey, settings.remoteAiUrl]);
-
   async function handleSaveAssistantName() {
     if (!assistantName.trim()) {
-      Alert.alert("Нужно имя", "Введите имя нейросети, под которым она будет отвечать в чате.");
+      Alert.alert(
+        "Нужно имя",
+        "Введите имя нейросети, под которым она будет отвечать в чате."
+      );
       return;
     }
 
@@ -81,34 +68,6 @@ export function SettingsExperienceScreen({ navigation }: Props) {
       Alert.alert("Ошибка", message);
     } finally {
       setSavingAssistant(false);
-    }
-  }
-
-  async function handleSaveAiConfig() {
-    if (remoteAiEnabled && !remoteAiUrl.trim()) {
-      Alert.alert("Нужен адрес", "Укажите публичный HTTPS-адрес вида https://example.com/chat.");
-      return;
-    }
-
-    if (remoteAiEnabled && !/^https:\/\//i.test(remoteAiUrl.trim())) {
-      Alert.alert("Нужен HTTPS", "Для внешнего доступа используйте публичный HTTPS-адрес.");
-      return;
-    }
-
-    try {
-      setSavingAi(true);
-      await setRemoteAiConfig({
-        remoteAiEnabled,
-        remoteAiUrl,
-        remoteAiKey
-      });
-      Alert.alert("Сохранено", "Параметры подключения к AI обновлены.");
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Не удалось сохранить параметры AI.";
-      Alert.alert("Ошибка", message);
-    } finally {
-      setSavingAi(false);
     }
   }
 
@@ -148,7 +107,12 @@ export function SettingsExperienceScreen({ navigation }: Props) {
                         onPress={() => void setThemePreference(option.id)}
                         style={[styles.optionButton, active && styles.optionButtonActive]}
                       >
-                        <Text style={[styles.optionButtonText, active && styles.optionButtonTextActive]}>
+                        <Text
+                          style={[
+                            styles.optionButtonText,
+                            active && styles.optionButtonTextActive
+                          ]}
+                        >
                           {option.title}
                         </Text>
                       </Pressable>
@@ -172,75 +136,11 @@ export function SettingsExperienceScreen({ navigation }: Props) {
                 </View>
 
                 <View style={styles.metaCard}>
-                  <Text style={styles.metaText}>Пользователь: {currentUser?.name ?? "Не указан"}</Text>
+                  <Text style={styles.metaText}>
+                    Пользователь: {currentUser?.name ?? "Не указан"}
+                  </Text>
                   <Text style={styles.metaText}>Email: {currentUser?.email ?? "Не указан"}</Text>
                   <Text style={styles.metaText}>Сохранено чатов: {threads.length}</Text>
-                </View>
-
-                <View style={styles.technicalBlock}>
-                  <Text style={styles.technicalTitle}>Технический блок AI</Text>
-                  <Text style={styles.technicalHint}>
-                    Здесь можно поменять внешний адрес Node-моста и токен для доступа через интернет.
-                  </Text>
-
-                  <View style={styles.technicalToggleRow}>
-                    <Pressable
-                      onPress={() => setRemoteAiEnabled(true)}
-                      style={[
-                        styles.toggleChip,
-                        remoteAiEnabled && styles.toggleChipActive
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.toggleChipText,
-                          remoteAiEnabled && styles.toggleChipTextActive
-                        ]}
-                      >
-                        Внешний AI
-                      </Text>
-                    </Pressable>
-                    <Pressable
-                      onPress={() => setRemoteAiEnabled(false)}
-                      style={[
-                        styles.toggleChip,
-                        !remoteAiEnabled && styles.toggleChipActive
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.toggleChipText,
-                          !remoteAiEnabled && styles.toggleChipTextActive
-                        ]}
-                      >
-                        Mock
-                      </Text>
-                    </Pressable>
-                  </View>
-
-                  <NeuroField
-                    label="AI URL"
-                    value={remoteAiUrl}
-                    onChangeText={setRemoteAiUrl}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    placeholder="https://your-domain.example/chat"
-                  />
-                  <NeuroField
-                    label="Bearer token"
-                    value={remoteAiKey}
-                    onChangeText={setRemoteAiKey}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    placeholder="Ваш CHAT_SERVER_API_KEY"
-                  />
-
-                  <NeuroButton
-                    title="Сохранить AI"
-                    onPress={() => void handleSaveAiConfig()}
-                    loading={savingAi}
-                    compact
-                  />
                 </View>
 
                 <View style={styles.bottomActions}>
@@ -331,52 +231,6 @@ const createStyles = (palette: ReturnType<typeof getNeuroPalette>) =>
       fontSize: 14,
       color: palette.inkSoft,
       fontStyle: "italic"
-    },
-    technicalBlock: {
-      borderRadius: 30,
-      borderWidth: 3,
-      borderColor: palette.outline,
-      backgroundColor: palette.panelMuted,
-      paddingHorizontal: 14,
-      paddingVertical: 16,
-      gap: 12
-    },
-    technicalTitle: {
-      fontSize: 18,
-      fontWeight: "800",
-      color: palette.ink
-    },
-    technicalHint: {
-      fontSize: 13,
-      lineHeight: 18,
-      color: palette.inkSoft,
-      fontStyle: "italic"
-    },
-    technicalToggleRow: {
-      flexDirection: "row",
-      gap: 10
-    },
-    toggleChip: {
-      flex: 1,
-      minHeight: 46,
-      borderRadius: 24,
-      borderWidth: 2,
-      borderColor: palette.outline,
-      backgroundColor: palette.panel,
-      alignItems: "center",
-      justifyContent: "center",
-      paddingHorizontal: 10
-    },
-    toggleChipActive: {
-      backgroundColor: palette.gradientTop
-    },
-    toggleChipText: {
-      fontSize: 14,
-      fontWeight: "700",
-      color: palette.inkSoft
-    },
-    toggleChipTextActive: {
-      color: "#111111"
     },
     bottomActions: {
       gap: 12,

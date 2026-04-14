@@ -90,16 +90,28 @@ function normalizeSettings(settings: AppSettings | null | undefined): AppSetting
   };
 }
 
+function normalizeSession(session: AuthSession | null | undefined): AuthSession | null {
+  if (!session || typeof session !== "object" || typeof session.userId !== "string") {
+    return null;
+  }
+
+  return {
+    userId: session.userId,
+    token: typeof session.token === "string" ? session.token : undefined,
+    authMode: session.authMode === "server" ? "server" : "local"
+  };
+}
+
 export const storage = {
   getUsers: async () => {
     const users = await readJson<User[]>(KEYS.users, []);
     return users.map(normalizeUser);
   },
   saveUsers: (users: User[]) => writeJson(KEYS.users, users),
-  getSession: () => readJson<AuthSession | null>(KEYS.session, null),
+  getSession: async () => normalizeSession(await readJson<AuthSession | null>(KEYS.session, null)),
   saveSession: (session: AuthSession | null) =>
     session
-      ? writeJson(KEYS.session, session)
+      ? writeJson(KEYS.session, normalizeSession(session))
       : AsyncStorage.removeItem(KEYS.session),
   getThreads: async () => {
     const threads = await readJson<ChatThread[]>(KEYS.chats, []);

@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, ViewStyle } from "react-native";
+import { ActivityIndicator, Platform, Pressable, StyleSheet, ViewStyle } from "react-native";
 
 import { useSettings } from "../../contexts/SettingsContext";
 import { getNeuroPalette } from "../../theme/neuroFriend";
@@ -47,6 +47,7 @@ const createStyles = (palette: ReturnType<typeof getNeuroPalette>) =>
       borderWidth: 3,
       borderColor: palette.outline,
       backgroundColor: palette.panel,
+      overflow: Platform.OS === "android" ? "hidden" : "visible",
       alignItems: "center",
       justifyContent: "center",
       shadowColor: palette.shadow,
@@ -56,12 +57,14 @@ const createStyles = (palette: ReturnType<typeof getNeuroPalette>) =>
       elevation: 6
     },
     regular: {
-      minHeight: 62,
-      paddingHorizontal: 18
+      minHeight: 66,
+      paddingHorizontal: 18,
+      paddingVertical: 8
     },
     compact: {
-      minHeight: 52,
-      paddingHorizontal: 16
+      minHeight: 56,
+      paddingHorizontal: 16,
+      paddingVertical: 8
     },
     disabled: {
       opacity: 0.65

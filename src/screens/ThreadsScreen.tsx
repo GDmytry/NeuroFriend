@@ -3,7 +3,7 @@ import { Alert, FlatList, Pressable, StyleSheet, Text, View } from "react-native
 
 import { PrimaryButton } from "../components/PrimaryButton";
 import { MODE_OPTIONS } from "../constants/modes";
-import { useChat } from "../contexts/ChatRuntimeContext";
+import { useChat } from "../contexts/ChatSyncRuntimeContext";
 import { useSettings } from "../contexts/SettingsContext";
 import { ChatThread } from "../types";
 import { formatThreadTimestamp } from "../utils/date";

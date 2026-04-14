@@ -13,6 +13,8 @@ export type User = {
 
 export type AuthSession = {
   userId: string;
+  token?: string;
+  authMode?: "local" | "server";
 };
 
 export type MessageAuthor = "user" | "assistant" | "system";

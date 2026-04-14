@@ -1,7 +1,9 @@
 import React, { useMemo } from "react";
-import { StyleSheet, Text, View, ViewStyle } from "react-native";
+import { Platform, StyleSheet, Text, View, ViewStyle } from "react-native";
 
+import { useSettings } from "../../contexts/SettingsContext";
 import { NEURO_OUTLINE_FONT } from "../../theme/fonts";
+import { getNeuroPalette } from "../../theme/neuroFriend";
 
 type Props = {
   text: string;
@@ -18,6 +20,8 @@ export function OutlinedTitle({
   align = "center",
   style
 }: Props) {
+  const { theme } = useSettings();
+  const palette = getNeuroPalette(theme);
   const containerStyle = useMemo(
     () => ({
       alignSelf: align === "center" ? ("center" as const) : ("flex-start" as const)
@@ -27,50 +31,25 @@ export function OutlinedTitle({
   const textStyle = useMemo(
     () => ({
       fontSize: size,
-      lineHeight: Math.round(size * 1.08),
+      lineHeight: Math.round(size * (Platform.OS === "android" ? 1.2 : 1.12)),
       textAlign: align,
-      color: "#FFFFFF",
+      color: theme.dark ? "#FFFFFF" : "#111111",
       fontFamily: NEURO_OUTLINE_FONT,
-      includeFontPadding: false as const
+      includeFontPadding: false as const,
+      fontStyle: italic ? ("italic" as const) : ("normal" as const)
     }),
-    [align, size]
-  );
-  const outlineLayers = useMemo(
-    () => [
-      { x: -3, y: 0 },
-      { x: 3, y: 0 },
-      { x: 0, y: -3 },
-      { x: 0, y: 3 },
-      { x: -2, y: -2 },
-      { x: 2, y: -2 },
-      { x: -2, y: 2 },
-      { x: 2, y: 2 },
-      { x: -3, y: -1 },
-      { x: 3, y: -1 },
-      { x: -3, y: 1 },
-      { x: 3, y: 1 }
-    ],
-    []
+    [align, italic, size, theme.dark]
   );
 
   return (
     <View style={[styles.wrapper, containerStyle, style]}>
-      {outlineLayers.map((layer) => (
-        <Text
-          key={`${layer.x}:${layer.y}`}
-          style={[
-            styles.outlineText,
-            textStyle,
-            {
-              color: "#000000",
-              transform: [{ translateX: layer.x }, { translateY: layer.y }]
-            }
-          ]}
-        >
-          {text}
-        </Text>
-      ))}
-      <Text style={[textStyle, styles.mainText]}>{text}</Text>
+      <Text
+        allowFontScaling={false}
+        numberOfLines={1}
+        style={[textStyle, styles.mainText, { color: palette.ink }]}
+      >
+        {text}
+      </Text>
     </View>
   );
 }
@@ -78,17 +57,12 @@ export function OutlinedTitle({
 const styles = StyleSheet.create({
   wrapper: {
     position: "relative",
-    paddingHorizontal: 3,
-    paddingVertical: 3
+    paddingHorizontal: Platform.OS === "android" ? 8 : 6,
+    paddingVertical: Platform.OS === "android" ? 8 : 6,
+    justifyContent: "center",
+    overflow: "visible"
   },
   mainText: {
-    position: "relative",
-    zIndex: 2
-  },
-  outlineText: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    zIndex: 1
+    position: "relative"
   }
 });

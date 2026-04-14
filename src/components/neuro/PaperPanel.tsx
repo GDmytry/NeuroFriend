@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { StyleSheet, View, ViewProps } from "react-native";
+import { Platform, StyleSheet, View, ViewProps } from "react-native";
 
 import { useSettings } from "../../contexts/SettingsContext";
 import { getNeuroPalette } from "../../theme/neuroFriend";
@@ -27,6 +27,7 @@ const createStyles = (palette: ReturnType<typeof getNeuroPalette>) =>
       borderWidth: 3,
       borderColor: palette.outline,
       backgroundColor: palette.panel,
+      overflow: Platform.OS === "android" ? "hidden" : "visible",
       shadowColor: palette.shadow,
       shadowOpacity: 1,
       shadowRadius: 18,

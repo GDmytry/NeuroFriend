@@ -16,7 +16,7 @@ import { NeuroButton } from "../components/neuro/NeuroButton";
 import { NeuroField } from "../components/neuro/NeuroField";
 import { OutlinedTitle } from "../components/neuro/OutlinedTitle";
 import { PaperPanel } from "../components/neuro/PaperPanel";
-import { useAuth } from "../contexts/AuthContext";
+import { useAuth } from "../contexts/AuthSyncContext";
 import { useSettings } from "../contexts/SettingsContext";
 import { RootStackParamList } from "../navigation/AppNavigator";
 import { getNeuroPalette } from "../theme/neuroFriend";

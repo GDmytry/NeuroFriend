@@ -2,12 +2,12 @@
 import { ActivityIndicator, View } from "react-native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
-import { useAuth } from "../contexts/AuthContext";
+import { useAuth } from "../contexts/AuthSyncContext";
 import { useSettings } from "../contexts/SettingsContext";
 import { ChatExperienceScreen } from "../screens/ChatExperienceScreen";
 import { LoginWorkspaceScreen } from "../screens/LoginWorkspaceScreen";
 import { RegistrationWorkspaceScreen } from "../screens/RegistrationWorkspaceScreen";
-import { SettingsExperienceScreen } from "../screens/SettingsExperienceScreen";
+import { SettingsAppScreen } from "../screens/SettingsAppScreen";
 import { StartExperienceScreen } from "../screens/StartExperienceScreen";
 
 export type RootStackParamList = {
@@ -52,7 +52,7 @@ export function AppNavigator() {
           <Stack.Screen name="Main" component={ChatExperienceScreen} />
           <Stack.Screen
             name="Settings"
-            component={SettingsExperienceScreen}
+            component={SettingsAppScreen}
             options={{ animation: "fade_from_bottom" }}
           />
         </>

@@ -1,13 +1,17 @@
 import React from "react";
 
-import { AuthProvider, useAuth } from "../contexts/AuthContext";
-import { ChatProvider } from "../contexts/ChatRuntimeContext";
+import { AuthProvider, useAuth } from "../contexts/AuthSyncContext";
+import { ChatProvider } from "../contexts/ChatSyncRuntimeContext";
 import { SettingsProvider } from "../contexts/SettingsContext";
 
 function NestedProviders({ children }: { children: React.ReactNode }) {
-  const { currentUser } = useAuth();
+  const { currentUser, session } = useAuth();
 
-  return <ChatProvider currentUser={currentUser}>{children}</ChatProvider>;
+  return (
+    <ChatProvider currentUser={currentUser} session={session}>
+      {children}
+    </ChatProvider>
+  );
 }
 
 export function AppProviders({ children }: { children: React.ReactNode }) {

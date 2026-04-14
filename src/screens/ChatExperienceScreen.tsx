@@ -16,15 +16,15 @@ import {
   View
 } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { GradientScreen } from "../components/neuro/GradientScreen";
 import { NeuroButton } from "../components/neuro/NeuroButton";
 import { NeuroMessageBubble } from "../components/neuro/NeuroMessageBubble";
 import { OutlinedTitle } from "../components/neuro/OutlinedTitle";
 import { PaperPanel } from "../components/neuro/PaperPanel";
-import { useAuth } from "../contexts/AuthContext";
-import { useChat } from "../contexts/ChatRuntimeContext";
+import { useAuth } from "../contexts/AuthSyncContext";
+import { useChat } from "../contexts/ChatSyncRuntimeContext";
 import { useSettings } from "../contexts/SettingsContext";
 import { RootStackParamList } from "../navigation/AppNavigator";
 import { pickTextAttachments } from "../services/attachmentRuntimeService";
@@ -56,10 +56,12 @@ export function ChatExperienceScreen({ navigation }: Props) {
   const palette = getNeuroPalette(theme);
   const styles = useMemo(() => createStyles(palette), [palette]);
   const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const drawerWidth = Math.min(width * 0.58, 320);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [pendingAttachments, setPendingAttachments] = useState<ChatAttachment[]>([]);
   const [drawerMounted, setDrawerMounted] = useState(false);
   const [editingThreadId, setEditingThreadId] = useState<string | null>(null);
@@ -80,8 +82,17 @@ export function ChatExperienceScreen({ navigation }: Props) {
   useEffect(() => {
     const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
     const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
-    const showSubscription = Keyboard.addListener(showEvent, () => setKeyboardVisible(true));
-    const hideSubscription = Keyboard.addListener(hideEvent, () => setKeyboardVisible(false));
+    const showSubscription = Keyboard.addListener(showEvent, (event) => {
+      setKeyboardVisible(true);
+      setKeyboardHeight(event.endCoordinates?.height ?? 0);
+      setTimeout(() => {
+        messagesScrollRef.current?.scrollToEnd({ animated: true });
+      }, 40);
+    });
+    const hideSubscription = Keyboard.addListener(hideEvent, () => {
+      setKeyboardVisible(false);
+      setKeyboardHeight(0);
+    });
 
     return () => {
       showSubscription.remove();
@@ -327,9 +338,19 @@ export function ChatExperienceScreen({ navigation }: Props) {
       <SafeAreaView style={styles.safe}>
         <KeyboardAvoidingView
           style={styles.keyboard}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 14}
         >
-          <View style={styles.container}>
+          <View
+            style={[
+              styles.container,
+              {
+                paddingBottom:
+                  Math.max(insets.bottom, 14) +
+                  (Platform.OS === "android" && keyboardHeight > 0 ? 8 : 0)
+              }
+            ]}
+          >
             <PaperPanel style={styles.headerCard}>
               <OutlinedTitle text="Чат" size={34} style={styles.headerTitleWrap} />
             </PaperPanel>
@@ -422,6 +443,11 @@ export function ChatExperienceScreen({ navigation }: Props) {
                 <TextInput
                   value={draft}
                   onChangeText={setDraft}
+                  onFocus={() => {
+                    setTimeout(() => {
+                      messagesScrollRef.current?.scrollToEnd({ animated: true });
+                    }, 40);
+                  }}
                   multiline
                   style={styles.input}
                   placeholder="Введите сообщение"
@@ -563,12 +589,13 @@ const createStyles = (palette: ReturnType<typeof getNeuroPalette>) =>
       flex: 1
     },
     keyboard: {
-      flex: 1
+      flex: 1,
+      minHeight: 0
     },
     container: {
       flex: 1,
       paddingHorizontal: 20,
-      paddingBottom: 14
+      minHeight: 0
     },
     headerCard: {
       minHeight: 108,
@@ -608,13 +635,15 @@ const createStyles = (palette: ReturnType<typeof getNeuroPalette>) =>
     },
     chatCard: {
       flex: 1,
+      minHeight: 0,
       marginTop: 26,
       paddingHorizontal: 16,
       paddingTop: 18,
       paddingBottom: 14
     },
     messagesScroll: {
-      flex: 1
+      flex: 1,
+      minHeight: 0
     },
     messagesContent: {
       paddingTop: 8,

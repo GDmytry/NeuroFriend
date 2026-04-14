@@ -2,8 +2,8 @@ import React, { useMemo, useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { PrimaryButton } from "../components/PrimaryButton";
-import { useAuth } from "../contexts/AuthContext";
-import { useChat } from "../contexts/ChatRuntimeContext";
+import { useAuth } from "../contexts/AuthSyncContext";
+import { useChat } from "../contexts/ChatSyncRuntimeContext";
 import { useSettings } from "../contexts/SettingsContext";
 import { ThemePreference } from "../types";
 

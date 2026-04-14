@@ -1,6 +1,17 @@
 const { createServer } = require("node:http");
 const { existsSync, readFileSync } = require("node:fs");
 const { join } = require("node:path");
+const {
+  createSession,
+  deleteThread,
+  getUserBySessionToken,
+  listThreads,
+  loginUser,
+  registerUser,
+  saveThread,
+  saveThreads,
+  updateUser
+} = require("./store");
 
 loadEnvFile(join(__dirname, ".env"));
 
@@ -43,6 +54,93 @@ const server = createServer(async (request, response) => {
       return;
     }
 
+    if (url.pathname === "/auth/register" && request.method === "POST") {
+      if (!isAuthorized(request)) {
+        sendUnauthorized(response);
+        return;
+      }
+
+      const body = await readJsonBody(request);
+      await handleRegister(body, response);
+      return;
+    }
+
+    if (url.pathname === "/auth/login" && request.method === "POST") {
+      if (!isAuthorized(request)) {
+        sendUnauthorized(response);
+        return;
+      }
+
+      const body = await readJsonBody(request);
+      await handleLogin(body, response);
+      return;
+    }
+
+    if (url.pathname === "/auth/session" && request.method === "GET") {
+      if (!isAuthorized(request)) {
+        sendUnauthorized(response);
+        return;
+      }
+
+      await handleSession(request, response);
+      return;
+    }
+
+    if (url.pathname === "/auth/me" && request.method === "PATCH") {
+      if (!isAuthorized(request)) {
+        sendUnauthorized(response);
+        return;
+      }
+
+      const body = await readJsonBody(request);
+      await handleUpdateMe(request, body, response);
+      return;
+    }
+
+    if (url.pathname === "/threads" && request.method === "GET") {
+      if (!isAuthorized(request)) {
+        sendUnauthorized(response);
+        return;
+      }
+
+      await handleGetThreads(request, response);
+      return;
+    }
+
+    if (url.pathname === "/threads/sync" && request.method === "POST") {
+      if (!isAuthorized(request)) {
+        sendUnauthorized(response);
+        return;
+      }
+
+      const body = await readJsonBody(request);
+      await handleSyncThreads(request, body, response);
+      return;
+    }
+
+    if (url.pathname.startsWith("/threads/") && request.method === "PUT") {
+      if (!isAuthorized(request)) {
+        sendUnauthorized(response);
+        return;
+      }
+
+      const threadId = decodeURIComponent(url.pathname.slice("/threads/".length));
+      const body = await readJsonBody(request);
+      await handleSaveThread(request, threadId, body, response);
+      return;
+    }
+
+    if (url.pathname.startsWith("/threads/") && request.method === "DELETE") {
+      if (!isAuthorized(request)) {
+        sendUnauthorized(response);
+        return;
+      }
+
+      const threadId = decodeURIComponent(url.pathname.slice("/threads/".length));
+      await handleDeleteThread(request, threadId, response);
+      return;
+    }
+
     if (url.pathname === "/chat" && request.method === "POST") {
       const requestStartedAt = Date.now();
       const clientAddress = request.socket.remoteAddress || "unknown";
@@ -70,7 +168,12 @@ const server = createServer(async (request, response) => {
       error: "Not found"
     });
   } catch (error) {
-    sendJson(response, 500, {
+    const statusCode =
+      error && typeof error === "object" && typeof error.statusCode === "number"
+        ? error.statusCode
+        : 500;
+
+    sendJson(response, statusCode, {
       ok: false,
       error: getErrorMessage(error)
     });
@@ -86,6 +189,108 @@ server.listen(config.port, config.host, () => {
     `[neuro-chat-server] Auth: ${config.apiKey ? "Bearer token enabled" : "disabled"}`
   );
 });
+
+async function handleRegister(body, response) {
+  let user;
+
+  try {
+    user = registerUser(body);
+  } catch (error) {
+    error.statusCode = String(error.message || "").includes("already exists") ? 409 : 400;
+    throw error;
+  }
+
+  const sessionToken = createSession(user.id);
+
+  sendJson(response, 201, {
+    ok: true,
+    user,
+    sessionToken,
+    threads: []
+  });
+}
+
+async function handleLogin(body, response) {
+  let user;
+
+  try {
+    user = loginUser(body);
+  } catch (error) {
+    error.statusCode = 401;
+    throw error;
+  }
+
+  const sessionToken = createSession(user.id);
+
+  sendJson(response, 200, {
+    ok: true,
+    user,
+    sessionToken,
+    threads: listThreads(user.id)
+  });
+}
+
+async function handleSession(request, response) {
+  const user = requireSessionUser(request);
+
+  sendJson(response, 200, {
+    ok: true,
+    user,
+    threads: listThreads(user.id)
+  });
+}
+
+async function handleUpdateMe(request, body, response) {
+  const user = requireSessionUser(request);
+  const nextUser = updateUser(user.id, body);
+
+  sendJson(response, 200, {
+    ok: true,
+    user: nextUser
+  });
+}
+
+async function handleGetThreads(request, response) {
+  const user = requireSessionUser(request);
+
+  sendJson(response, 200, {
+    ok: true,
+    threads: listThreads(user.id)
+  });
+}
+
+async function handleSyncThreads(request, body, response) {
+  const user = requireSessionUser(request);
+  const nextThreads = saveThreads(user.id, body?.threads);
+
+  sendJson(response, 200, {
+    ok: true,
+    threads: nextThreads
+  });
+}
+
+async function handleSaveThread(request, threadId, body, response) {
+  const user = requireSessionUser(request);
+  const payload = body?.thread && typeof body.thread === "object" ? body.thread : body;
+  const savedThread = saveThread(user.id, {
+    ...(payload || {}),
+    id: threadId || payload?.id
+  });
+
+  sendJson(response, 200, {
+    ok: true,
+    thread: savedThread
+  });
+}
+
+async function handleDeleteThread(request, threadId, response) {
+  const user = requireSessionUser(request);
+  deleteThread(user.id, threadId);
+
+  sendJson(response, 200, {
+    ok: true
+  });
+}
 
 async function handleHealth(response) {
   try {
@@ -205,6 +410,35 @@ function isAuthorized(request) {
 
   const header = request.headers.authorization || "";
   return header === `Bearer ${config.apiKey}`;
+}
+
+function sendUnauthorized(response) {
+  sendJson(response, 401, {
+    ok: false,
+    error: "Unauthorized"
+  });
+}
+
+function requireSessionUser(request) {
+  const sessionToken = String(request.headers["x-session-token"] || "").trim();
+
+  if (!sessionToken) {
+    throw createHttpError(401, "Session token is required");
+  }
+
+  const user = getUserBySessionToken(sessionToken);
+
+  if (!user) {
+    throw createHttpError(401, "Invalid or expired session");
+  }
+
+  return user;
+}
+
+function createHttpError(statusCode, message) {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  return error;
 }
 
 function setCorsHeaders(response) {

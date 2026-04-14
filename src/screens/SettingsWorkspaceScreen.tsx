@@ -3,8 +3,8 @@ import { Alert, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { AppTextField } from "../components/AppTextField";
 import { PrimaryButton } from "../components/PrimaryButton";
-import { useAuth } from "../contexts/AuthContext";
-import { useChat } from "../contexts/ChatRuntimeContext";
+import { useAuth } from "../contexts/AuthSyncContext";
+import { useChat } from "../contexts/ChatSyncRuntimeContext";
 import { useSettings } from "../contexts/SettingsContext";
 import { ThemePreference } from "../types";
 

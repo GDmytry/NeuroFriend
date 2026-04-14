@@ -12,8 +12,8 @@ import {
 import { AppTextField } from "../components/AppTextField";
 import { ModeSelector } from "../components/ModeSelector";
 import { PrimaryButton } from "../components/PrimaryButton";
-import { useAuth } from "../contexts/AuthContext";
-import { useChat } from "../contexts/ChatRuntimeContext";
+import { useAuth } from "../contexts/AuthSyncContext";
+import { useChat } from "../contexts/ChatSyncRuntimeContext";
 import { useSettings } from "../contexts/SettingsContext";
 
 export function SignUpScreen() {

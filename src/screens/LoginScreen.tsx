@@ -4,7 +4,7 @@ import { NativeStackScreenProps } from "@react-navigation/native-stack";
 
 import { AppTextField } from "../components/AppTextField";
 import { PrimaryButton } from "../components/PrimaryButton";
-import { useAuth } from "../contexts/AuthContext";
+import { useAuth } from "../contexts/AuthSyncContext";
 import { RootStackParamList } from "../navigation/AppNavigator";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Login">;

@@ -3,6 +3,7 @@
     "name": "Neuro Chat",
     "slug": "neuro-chat-mobile",
     "version": "1.0.0",
+    "icon": "./assets/app-icon.png",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "jsEngine": "hermes",
@@ -13,12 +14,17 @@
       "bundleIdentifier": "com.codex.neurochat"
     },
     "android": {
-      "package": "com.codex.neurochat"
+      "package": "com.codex.neurochat",
+      "softwareKeyboardLayoutMode": "resize"
     },
     "extra": {
       "useMockAi": false,
       "aiApiUrl": "https://nelinux.taildbcf93.ts.net/chat",
-      "aiApiKey": "b187155b9584417abcdc34919d66cfd5"
-    }
+      "aiApiKey": "b187155b9584417abcdc34919d66cfd5",
+      "eas": {
+        "projectId": "0943255e-8d0e-4499-8acb-fa0e4128938f"
+      }
+    },
+    "owner": "dmytrygl"
   }
 }
