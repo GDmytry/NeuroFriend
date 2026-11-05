@@ -59,5 +59,27 @@ target 'NeuroChat' do
       :mac_catalyst_enabled => false,
       :ccache_enabled => ccache_enabled?(podfile_properties),
     )
+
+    installer.pods_project.targets.each do |target|
+      target.build_configurations.each do |c|
+        if c.build_settings['IPHONEOS_DEPLOYMENT_TARGET'].to_f < 15.1
+          c.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.1'
+        end
+        if target.name == 'fmt'
+          c.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= '$(inherited)'
+          c.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] << ' FMT_USE_CONSTEVAL=0'
+        end
+      end
+    end
+
+    base_h = File.join(__dir__, 'Pods/fmt/include/fmt/base.h')
+    if File.exist?(base_h)
+      system("chmod +w '#{base_h}' 2>/dev/null")
+      content = File.read(base_h)
+      if !content.include?('defined(FMT_USE_CONSTEVAL)')
+        content = content.sub('#if !defined(__cpp_lib_is_constant_evaluated)', "#if defined(FMT_USE_CONSTEVAL)\n// Use the provided definition.\n#elif !defined(__cpp_lib_is_constant_evaluated)")
+        File.write(base_h, content)
+      end
+    end
   end
 end

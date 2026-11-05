@@ -9,27 +9,27 @@
 /* Begin PBXBuildFile section */
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
 		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
-		48745089EB808269E3049CE1 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 995737CF5D758587117ECB30 /* PrivacyInfo.xcprivacy */; };
-		5CE51E31D622880F8DBB525F /* libPods-NeuroChat.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 787D2625A5FE047AA1A0C926 /* libPods-NeuroChat.a */; };
+		53D2C165ED8853BB007D03E3 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 007FF6D7766B40FDC734FDF4 /* PrivacyInfo.xcprivacy */; };
+		8062217B20D4BB1ADE8F6238 /* libPods-NeuroChat.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BA7722E7E98C871F6DCDF90A /* libPods-NeuroChat.a */; };
+		AC7400D53A9E774CE1BB3659 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 870012BA81EC27087D89BE88 /* ExpoModulesProvider.swift */; };
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
-		F5B918FD8AEAD6433DEC408A /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7129E51C83D9EE74A25956B1 /* ExpoModulesProvider.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		007FF6D7766B40FDC734FDF4 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = NeuroChat/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		063FD11CFD41198AE2198A49 /* Pods-NeuroChat.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-NeuroChat.release.xcconfig"; path = "Target Support Files/Pods-NeuroChat/Pods-NeuroChat.release.xcconfig"; sourceTree = "<group>"; };
 		13B07F961A680F5B00A75B9A /* NeuroChat.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NeuroChat.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = NeuroChat/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = NeuroChat/Info.plist; sourceTree = "<group>"; };
-		7129E51C83D9EE74A25956B1 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-NeuroChat/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
-		787D2625A5FE047AA1A0C926 /* libPods-NeuroChat.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-NeuroChat.a"; sourceTree = BUILT_PRODUCTS_DIR; };
-		995737CF5D758587117ECB30 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = NeuroChat/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
-		A26AC47A04744FACF559395F /* Pods-NeuroChat.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-NeuroChat.debug.xcconfig"; path = "Target Support Files/Pods-NeuroChat/Pods-NeuroChat.debug.xcconfig"; sourceTree = "<group>"; };
+		870012BA81EC27087D89BE88 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-NeuroChat/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
 		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = NeuroChat/SplashScreen.storyboard; sourceTree = "<group>"; };
+		BA7722E7E98C871F6DCDF90A /* libPods-NeuroChat.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-NeuroChat.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
-		C77567F8576CECCB3D3645FC /* Pods-NeuroChat.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-NeuroChat.release.xcconfig"; path = "Target Support Files/Pods-NeuroChat/Pods-NeuroChat.release.xcconfig"; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = NeuroChat/AppDelegate.swift; sourceTree = "<group>"; };
 		F11748442D0722820044C1D9 /* NeuroChat-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "NeuroChat-Bridging-Header.h"; path = "NeuroChat/NeuroChat-Bridging-Header.h"; sourceTree = "<group>"; };
+		F701C761918CBA32E6F31C28 /* Pods-NeuroChat.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-NeuroChat.debug.xcconfig"; path = "Target Support Files/Pods-NeuroChat/Pods-NeuroChat.debug.xcconfig"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -37,13 +37,21 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				5CE51E31D622880F8DBB525F /* libPods-NeuroChat.a in Frameworks */,
+				8062217B20D4BB1ADE8F6238 /* libPods-NeuroChat.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		0C808B2AB2D8FEB0AB7EC7AF /* ExpoModulesProviders */ = {
+			isa = PBXGroup;
+			children = (
+				58795ABB98246D1BC5D6BC22 /* NeuroChat */,
+			);
+			name = ExpoModulesProviders;
+			sourceTree = "<group>";
+		};
 		13B07FAE1A68108700A75B9A /* NeuroChat */ = {
 			isa = PBXGroup;
 			children = (
@@ -53,27 +61,35 @@
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */,
-				995737CF5D758587117ECB30 /* PrivacyInfo.xcprivacy */,
+				007FF6D7766B40FDC734FDF4 /* PrivacyInfo.xcprivacy */,
 			);
 			name = NeuroChat;
-			sourceTree = "<group>";
-		};
-		219C44314197DA8D9F0FC22F /* Pods */ = {
-			isa = PBXGroup;
-			children = (
-				A26AC47A04744FACF559395F /* Pods-NeuroChat.debug.xcconfig */,
-				C77567F8576CECCB3D3645FC /* Pods-NeuroChat.release.xcconfig */,
-			);
-			path = Pods;
 			sourceTree = "<group>";
 		};
 		2D16E6871FA4F8E400B85C8A /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
 				ED297162215061F000B7C4FE /* JavaScriptCore.framework */,
-				787D2625A5FE047AA1A0C926 /* libPods-NeuroChat.a */,
+				BA7722E7E98C871F6DCDF90A /* libPods-NeuroChat.a */,
 			);
 			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		44CB36D675222FBBDD2BA3DD /* Pods */ = {
+			isa = PBXGroup;
+			children = (
+				F701C761918CBA32E6F31C28 /* Pods-NeuroChat.debug.xcconfig */,
+				063FD11CFD41198AE2198A49 /* Pods-NeuroChat.release.xcconfig */,
+			);
+			path = Pods;
+			sourceTree = "<group>";
+		};
+		58795ABB98246D1BC5D6BC22 /* NeuroChat */ = {
+			isa = PBXGroup;
+			children = (
+				870012BA81EC27087D89BE88 /* ExpoModulesProvider.swift */,
+			);
+			name = NeuroChat;
 			sourceTree = "<group>";
 		};
 		832341AE1AAA6A7D00B99B32 /* Libraries */ = {
@@ -90,8 +106,8 @@
 				832341AE1AAA6A7D00B99B32 /* Libraries */,
 				83CBBA001A601CBA00E9B192 /* Products */,
 				2D16E6871FA4F8E400B85C8A /* Frameworks */,
-				219C44314197DA8D9F0FC22F /* Pods */,
-				AFAEC2AE8CF0B791A0D81316 /* ExpoModulesProviders */,
+				44CB36D675222FBBDD2BA3DD /* Pods */,
+				0C808B2AB2D8FEB0AB7EC7AF /* ExpoModulesProviders */,
 			);
 			indentWidth = 2;
 			sourceTree = "<group>";
@@ -106,14 +122,6 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
-		AFAEC2AE8CF0B791A0D81316 /* ExpoModulesProviders */ = {
-			isa = PBXGroup;
-			children = (
-				EF86301E878D0EEA5038F946 /* NeuroChat */,
-			);
-			name = ExpoModulesProviders;
-			sourceTree = "<group>";
-		};
 		BB2F792B24A3F905000567C9 /* Supporting */ = {
 			isa = PBXGroup;
 			children = (
@@ -121,14 +129,6 @@
 			);
 			name = Supporting;
 			path = NeuroChat/Supporting;
-			sourceTree = "<group>";
-		};
-		EF86301E878D0EEA5038F946 /* NeuroChat */ = {
-			isa = PBXGroup;
-			children = (
-				7129E51C83D9EE74A25956B1 /* ExpoModulesProvider.swift */,
-			);
-			name = NeuroChat;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -139,13 +139,13 @@
 			buildConfigurationList = 13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "NeuroChat" */;
 			buildPhases = (
 				08A4A3CD28434E44B6B9DE2E /* [CP] Check Pods Manifest.lock */,
-				990009F6C5B78F17E858AC03 /* [Expo] Configure project */,
+				F88C4DC46448F08B3C6E81E8 /* [Expo] Configure project */,
 				13B07F871A680F5B00A75B9A /* Sources */,
 				13B07F8C1A680F5B00A75B9A /* Frameworks */,
 				13B07F8E1A680F5B00A75B9A /* Resources */,
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
 				800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */,
-				ACF12B19BD25E10FCF22A210 /* [CP] Embed Pods Frameworks */,
+				B591FE0D6EB521523222687F /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
@@ -195,7 +195,7 @@
 				BB2F792D24A3F905000567C9 /* Expo.plist in Resources */,
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */,
-				48745089EB808269E3049CE1 /* PrivacyInfo.xcprivacy in Resources */,
+				53D2C165ED8853BB007D03E3 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -269,7 +269,29 @@
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-NeuroChat/Pods-NeuroChat-resources.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
-		990009F6C5B78F17E858AC03 /* [Expo] Configure project */ = {
+		B591FE0D6EB521523222687F /* [CP] Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-NeuroChat/Pods-NeuroChat-frameworks.sh",
+				"${PODS_XCFRAMEWORKS_BUILD_DIR}/React-Core-prebuilt/React.framework/React",
+				"${PODS_XCFRAMEWORKS_BUILD_DIR}/ReactNativeDependencies/ReactNativeDependencies.framework/ReactNativeDependencies",
+				"${PODS_XCFRAMEWORKS_BUILD_DIR}/hermes-engine/Pre-built/hermes.framework/hermes",
+			);
+			name = "[CP] Embed Pods Frameworks";
+			outputPaths = (
+				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/React.framework",
+				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/ReactNativeDependencies.framework",
+				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/hermes.framework",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-NeuroChat/Pods-NeuroChat-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		F88C4DC46448F08B3C6E81E8 /* [Expo] Configure project */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
@@ -293,28 +315,6 @@
 			shellPath = /bin/sh;
 			shellScript = "# This script configures Expo modules and generates the modules provider file.\nbash -l -c \"./Pods/Target\\ Support\\ Files/Pods-NeuroChat/expo-configure-project.sh\"\n";
 		};
-		ACF12B19BD25E10FCF22A210 /* [CP] Embed Pods Frameworks */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-NeuroChat/Pods-NeuroChat-frameworks.sh",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/React-Core-prebuilt/React.framework/React",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/ReactNativeDependencies/ReactNativeDependencies.framework/ReactNativeDependencies",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/hermes-engine/Pre-built/hermes.framework/hermes",
-			);
-			name = "[CP] Embed Pods Frameworks";
-			outputPaths = (
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/React.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/ReactNativeDependencies.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/hermes.framework",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-NeuroChat/Pods-NeuroChat-frameworks.sh\"\n";
-			showEnvVarsInLog = 0;
-		};
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -323,7 +323,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */,
-				F5B918FD8AEAD6433DEC408A /* ExpoModulesProvider.swift in Sources */,
+				AC7400D53A9E774CE1BB3659 /* ExpoModulesProvider.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -332,7 +332,7 @@
 /* Begin XCBuildConfiguration section */
 		13B07F941A680F5B00A75B9A /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = A26AC47A04744FACF559395F /* Pods-NeuroChat.debug.xcconfig */;
+			baseConfigurationReference = F701C761918CBA32E6F31C28 /* Pods-NeuroChat.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
@@ -369,7 +369,7 @@
 		};
 		13B07F951A680F5B00A75B9A /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = C77567F8576CECCB3D3645FC /* Pods-NeuroChat.release.xcconfig */;
+			baseConfigurationReference = 063FD11CFD41198AE2198A49 /* Pods-NeuroChat.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
