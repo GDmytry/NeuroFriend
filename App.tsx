@@ -1,5 +1,5 @@
 import React from "react";
-import { ActivityIndicator, View } from "react-native";
+import { ActivityIndicator, Alert, Platform, View } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { useFonts } from "expo-font";
 import { StatusBar } from "expo-status-bar";
@@ -9,6 +9,12 @@ import { useSettings } from "./src/contexts/SettingsContext";
 import { AppNavigator } from "./src/navigation/AppNavigator";
 import { AppProviders } from "./src/providers/AppProviders";
 import { NEURO_OUTLINE_FONT } from "./src/theme/fonts";
+
+if (Platform.OS === "web" && typeof window !== "undefined") {
+  Alert.alert = (title: string, message?: string) => {
+    window.alert([title, message].filter(Boolean).join("\n\n"));
+  };
+}
 
 function AppContent() {
   const { isReady, theme } = useSettings();

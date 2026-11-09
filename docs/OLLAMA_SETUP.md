@@ -2,7 +2,7 @@
 
 This project now supports the following connection path:
 
-`Expo app -> Node bridge -> Ollama -> qwen3:8b`
+`Expo app -> Node bridge -> Ollama -> qwen3.5:4b`
 
 The mobile app should call the Node bridge, not Ollama directly.
 
@@ -14,12 +14,12 @@ Open PowerShell and run:
 ollama list
 ```
 
-You should see `qwen3:8b` in the list.
+You should see `qwen3.5:4b` in the list.
 
 Then run a quick test:
 
 ```powershell
-ollama run qwen3:8b "Привет! Ответь одним предложением."
+ollama run qwen3.5:4b "Привет! Ответь одним предложением."
 ```
 
 If the model answers, Ollama is ready.
@@ -57,7 +57,7 @@ CHAT_SERVER_HOST=0.0.0.0
 CHAT_SERVER_PORT=3001
 CHAT_SERVER_API_KEY=replace_me_with_a_long_random_string
 OLLAMA_BASE_URL=http://127.0.0.1:11434
-OLLAMA_MODEL=qwen3:8b
+OLLAMA_MODEL=qwen3.5:4b
 OLLAMA_KEEP_ALIVE=10m
 ```
 
@@ -99,7 +99,7 @@ Expected result:
 If `modelAvailable` is `false`, run:
 
 ```powershell
-ollama pull qwen3:8b
+ollama pull qwen3.5:4b
 ```
 
 ## 5. Find your computer IP for phone testing on the same Wi-Fi

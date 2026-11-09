@@ -1,17 +1,35 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 
-set "PROJECT_DIR=D:\Git\Reposi1\Playground"
-set "OLLAMA_EXE=E:\OllamaDir\ollama.exe"
+set "PROJECT_DIR=%~dp0"
+if "%PROJECT_DIR:~-1%"=="\" set "PROJECT_DIR=%PROJECT_DIR:~0,-1%"
+
+set "PATH=C:\Program Files\nodejs;%LOCALAPPDATA%\Programs\Ollama;%PATH%"
+
+set "OLLAMA_EXE=%LOCALAPPDATA%\Programs\Ollama\ollama.exe"
+if not exist "%OLLAMA_EXE%" (
+  for /f "delims=" %%P in ('where ollama.exe 2^>nul') do (
+    if not defined OLLAMA_FOUND (
+      set "OLLAMA_EXE=%%P"
+      set "OLLAMA_FOUND=1"
+    )
+  )
+)
+if not exist "%OLLAMA_EXE%" (
+  if exist "E:\OllamaDir\ollama.exe" set "OLLAMA_EXE=E:\OllamaDir\ollama.exe"
+)
+
 set "TAILSCALE_EXE=C:\Program Files\Tailscale\tailscale.exe"
 set "TAILSCALE_GUI=C:\Program Files\Tailscale\tailscale-ipn.exe"
 set "BRIDGE_PORT=3001"
+set "EXPO_PORT=8081"
 set "OLLAMA_HEALTH_URL=http://127.0.0.1:11434/api/tags"
 set "BRIDGE_HEALTH_URL=http://127.0.0.1:%BRIDGE_PORT%/health"
 set "WAIT_OLLAMA_SECONDS=60"
 set "WAIT_BRIDGE_SECONDS=45"
 set "DRY_RUN="
-set "OLLAMA_MODEL=qwen3:8b"
+set "OLLAMA_MODEL=qwen3.5:4b"
+set "API_KEY=b187155b9584417abcdc34919d66cfd5"
 set "OLLAMA_MODELS_FALLBACK=E:\.ollama\models"
 
 if /I "%~1"=="--dry-run" set "DRY_RUN=1"
@@ -30,6 +48,7 @@ if not exist "%PROJECT_DIR%\package.json" (
 if exist "%PROJECT_DIR%\server\.env" (
   for /f "usebackq tokens=1,* delims==" %%A in ("%PROJECT_DIR%\server\.env") do (
     if /I "%%~A"=="OLLAMA_MODEL" set "OLLAMA_MODEL=%%~B"
+    if /I "%%~A"=="CHAT_SERVER_API_KEY" set "API_KEY=%%~B"
   )
 )
 
@@ -50,30 +69,7 @@ if not exist "%OLLAMA_EXE%" (
   goto :fail
 )
 
-if not exist "%TAILSCALE_EXE%" (
-  echo [ERROR] Tailscale executable not found:
-  echo         %TAILSCALE_EXE%
-  goto :fail
-)
-
-echo [1/5] Checking Tailscale...
-call :run "%TAILSCALE_EXE%" status >nul 2>&1
-if errorlevel 1 (
-  if exist "%TAILSCALE_GUI%" (
-    call :start_app "%TAILSCALE_GUI%"
-    >nul timeout /t 2 /nobreak
-  )
-  call :run "%TAILSCALE_EXE%" up
-  call :run "%TAILSCALE_EXE%" status >nul 2>&1
-  if errorlevel 1 (
-    echo [ERROR] Tailscale is not connected. Finish login and rerun this file.
-    goto :fail
-  )
-)
-echo Tailscale is ready.
-echo.
-
-echo [2/5] Checking Ollama...
+echo [1/4] Checking Ollama...
 call :check_url "%OLLAMA_HEALTH_URL%"
 if errorlevel 1 (
   echo Ollama is not responding. Starting "ollama serve"...
@@ -97,19 +93,12 @@ if errorlevel 1 (
   echo        "%OLLAMA_EXE%" list
   echo If the model is missing, install it with:
   echo        "%OLLAMA_EXE%" pull %OLLAMA_MODEL%
-  if exist "%OLLAMA_MODELS_FALLBACK%" (
-    echo Detected local models folder:
-    echo        %OLLAMA_MODELS_FALLBACK%
-    echo One-time fix:
-    echo        setx OLLAMA_MODELS "%OLLAMA_MODELS_FALLBACK%"
-  )
-  echo Then fully restart Ollama and rerun this script.
   goto :fail
 )
 echo Model "%OLLAMA_MODEL%" is available.
 echo.
 
-echo [3/5] Checking local Node bridge...
+echo [2/4] Checking local Node bridge...
 call :check_url "%BRIDGE_HEALTH_URL%"
 if errorlevel 1 (
   echo Node bridge is not responding. Starting server:start...
@@ -128,39 +117,60 @@ if errorlevel 1 (
 echo Node bridge is ready.
 echo.
 
-echo [4/5] Enabling Tailscale Funnel...
-call :run "%TAILSCALE_EXE%" funnel --bg %BRIDGE_PORT%
+echo [3/4] Starting Expo (PC Web + Phone Dev Server)...
+call :check_url "http://127.0.0.1:%EXPO_PORT%"
 if errorlevel 1 (
-  echo [ERROR] Failed to enable Tailscale Funnel on port %BRIDGE_PORT%.
-  goto :fail
+  call :start_window_in_dir "NeuroFriend Expo App" "%PROJECT_DIR%" "npx.cmd expo start --web"
+) else (
+  echo Expo dev server is already running on port %EXPO_PORT%.
 )
-echo Funnel is active.
 echo.
 
-echo [5/5] Reading public Funnel URL...
+echo [4/4] Checking network and HTTPS tunnel...
+>nul timeout /t 6 /nobreak
+set "LAN_IP="
+for /f "usebackq delims=" %%I in (`powershell -NoProfile -ExecutionPolicy Bypass -Command "$ip = Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.IPAddress -notlike '127.*' -and $_.IPAddress -notlike '169.254.*' } | Select-Object -First 1 -ExpandProperty IPAddress; if ($ip) { $ip }" 2^>nul`) do (
+  set "LAN_IP=%%I"
+)
+
+set "PUBLIC_TUNNEL_URL="
+for /f "usebackq delims=" %%I in (`powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $h = Invoke-RestMethod -Uri '%BRIDGE_HEALTH_URL%' -TimeoutSec 4; if ($h.publicChatUrl) { $h.publicChatUrl } } catch {}" 2^>nul`) do (
+  set "PUBLIC_TUNNEL_URL=%%I"
+)
+
 set "FUNNEL_URL="
-for /f "usebackq delims=" %%I in (`powershell -NoProfile -ExecutionPolicy Bypass -Command "$line = & '%TAILSCALE_EXE%' funnel status | Select-String '^https://' | Select-Object -First 1; if ($line) { $line.Line }" 2^>nul`) do (
-  set "FUNNEL_URL=%%I"
-  goto :funnel_url_ready
+if exist "%TAILSCALE_EXE%" (
+  call :run "%TAILSCALE_EXE%" status >nul 2>&1
+  if not errorlevel 1 (
+    call :run "%TAILSCALE_EXE%" funnel --bg %BRIDGE_PORT% >nul 2>&1
+    for /f "usebackq delims=" %%I in (`powershell -NoProfile -ExecutionPolicy Bypass -Command "$line = & '%TAILSCALE_EXE%' funnel status | Select-String '^https://' | Select-Object -First 1; if ($line) { $line.Line }" 2^>nul`) do (
+      set "FUNNEL_URL=%%I"
+    )
+  )
 )
 
-:funnel_url_ready
-if not defined FUNNEL_URL (
-  echo [WARN] Could not read the Funnel URL automatically.
-  echo Run this command manually:
-  echo        "%TAILSCALE_EXE%" funnel status
-  goto :success
-)
-
-if "!FUNNEL_URL:~-1!"=="/" set "FUNNEL_URL=!FUNNEL_URL:~0,-1!"
-
-echo Public health URL:
-echo        !FUNNEL_URL!/health
-echo Public AI URL for the app:
-echo        !FUNNEL_URL!/chat
 echo.
-echo Use this bearer token in the app settings:
-echo        b187155b9584417abcdc34919d66cfd5
+echo =========================================================
+echo PC Web App:
+echo        http://localhost:%EXPO_PORT%
+echo Local health URL:
+echo        http://localhost:%BRIDGE_PORT%/health
+if defined PUBLIC_TUNNEL_URL (
+  echo Public HTTPS AI URL for Phone ^(works everywhere^):
+  echo        !PUBLIC_TUNNEL_URL!
+)
+if defined LAN_IP (
+  echo Phone AI URL ^(same Wi-Fi^):
+  echo        http://!LAN_IP!:%BRIDGE_PORT%/chat
+)
+if defined FUNNEL_URL (
+  if "!FUNNEL_URL:~-1!"=="/" set "FUNNEL_URL=!FUNNEL_URL:~0,-1!"
+  echo Tailscale Funnel AI URL:
+  echo        !FUNNEL_URL!/chat
+)
+echo Bearer token for app settings:
+echo        %API_KEY%
+echo =========================================================
 echo.
 echo Startup finished successfully.
 goto :success
@@ -182,14 +192,6 @@ for /L %%S in (1,1,%TARGET_WAIT%) do (
   >nul timeout /t 1 /nobreak
 )
 exit /b 1
-
-:start_app
-if defined DRY_RUN (
-  echo [DRY RUN] start "" "%~1"
-  exit /b 0
-)
-start "" "%~1" >nul 2>&1
-exit /b 0
 
 :start_window
 if defined DRY_RUN (

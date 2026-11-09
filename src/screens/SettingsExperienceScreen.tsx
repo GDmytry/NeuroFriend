@@ -86,12 +86,12 @@ export function SettingsExperienceScreen({ navigation }: Props) {
 
   async function handleSaveAiConfig() {
     if (remoteAiEnabled && !remoteAiUrl.trim()) {
-      Alert.alert("Нужен адрес", "Укажите публичный HTTPS-адрес вида https://example.com/chat.");
+      Alert.alert("Нужен адрес", "Укажите адрес сервера вида http://192.168.x.x:3001/chat или https://example.com/chat.");
       return;
     }
 
-    if (remoteAiEnabled && !/^https:\/\//i.test(remoteAiUrl.trim())) {
-      Alert.alert("Нужен HTTPS", "Для внешнего доступа используйте публичный HTTPS-адрес.");
+    if (remoteAiEnabled && !/^https?:\/\//i.test(remoteAiUrl.trim())) {
+      Alert.alert("Нужен адрес", "Адрес должен начинаться с http:// или https://.");
       return;
     }
 

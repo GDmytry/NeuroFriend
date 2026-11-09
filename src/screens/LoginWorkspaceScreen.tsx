@@ -79,7 +79,9 @@ export function LoginWorkspaceScreen({ navigation }: Props) {
                   />
 
                   <View style={styles.inlineRow}>
-                    <Text style={styles.secondaryLink}>Забыли пароль?</Text>
+                    <Pressable onPress={() => navigation.navigate("Settings")}>
+                      <Text style={styles.secondaryLink}>Настройки сервера</Text>
+                    </Pressable>
                     <Pressable onPress={() => navigation.navigate("Register")}>
                       <Text style={styles.secondaryLink}>Регистрация</Text>
                     </Pressable>

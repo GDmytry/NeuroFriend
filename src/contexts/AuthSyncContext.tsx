@@ -91,7 +91,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } catch (error) {
           const message = error instanceof Error ? error.message : "";
 
-          if (message.includes("Invalid email or password")) {
+          if (
+            message.includes("Invalid email or password") ||
+            message.includes("Неверный email или пароль")
+          ) {
             return;
           }
 
@@ -107,7 +110,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             const registerMessage =
               registerError instanceof Error ? registerError.message : "";
 
-            if (registerMessage.includes("already exists")) {
+            if (
+              registerMessage.includes("already exists") ||
+              registerMessage.includes("уже существует")
+            ) {
               return;
             }
 

@@ -1,4 +1,4 @@
-﻿import React from "react";
+import React from "react";
 import { ActivityIndicator, View } from "react-native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
@@ -72,6 +72,11 @@ export function AppNavigator() {
             name="Register"
             component={RegistrationWorkspaceScreen}
             options={{ animation: "slide_from_right" }}
+          />
+          <Stack.Screen
+            name="Settings"
+            component={SettingsAppScreen}
+            options={{ animation: "fade_from_bottom" }}
           />
         </>
       )}

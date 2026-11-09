@@ -65,14 +65,14 @@ export function SettingsWorkspaceScreen() {
 
   async function handleSaveAiConfig() {
     if (remoteAiEnabled && !remoteAiUrl.trim()) {
-      Alert.alert("Нужен адрес", "Укажите https-адрес вида https://example.com/chat");
+      Alert.alert("Нужен адрес", "Укажите адрес вида http://192.168.x.x:3001/chat или https://example.com/chat");
       return;
     }
 
-    if (remoteAiEnabled && !/^https:\/\//i.test(remoteAiUrl.trim())) {
+    if (remoteAiEnabled && !/^https?:\/\//i.test(remoteAiUrl.trim())) {
       Alert.alert(
-        "Нужен HTTPS",
-        "Для iPhone standalone-сборки лучше использовать именно https-адрес публичного туннеля."
+        "Нужен адрес",
+        "Адрес сервера должен начинаться с http:// или https://"
       );
       return;
     }

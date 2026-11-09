@@ -1,5 +1,6 @@
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system/legacy";
+import { Platform } from "react-native";
 
 import { ChatAttachment } from "../types";
 import { createId } from "../utils/id";
@@ -47,12 +48,27 @@ export async function pickTextAttachments() {
   return Promise.all(result.assets.map(readPickedAttachment));
 }
 
+async function readAssetText(asset: DocumentPicker.DocumentPickerAsset): Promise<string> {
+  const webFile = (asset as DocumentPicker.DocumentPickerAsset & { file?: File }).file;
+
+  if (webFile && typeof webFile.text === "function") {
+    return webFile.text();
+  }
+
+  if (Platform.OS === "web") {
+    const response = await fetch(asset.uri);
+    return response.text();
+  }
+
+  return FileSystem.readAsStringAsync(asset.uri);
+}
+
 async function readPickedAttachment(
   asset: DocumentPicker.DocumentPickerAsset
 ): Promise<ChatAttachment> {
   validateAsset(asset);
 
-  const rawText = await FileSystem.readAsStringAsync(asset.uri);
+  const rawText = await readAssetText(asset);
   const textContent = normalizeText(rawText);
 
   if (!textContent) {

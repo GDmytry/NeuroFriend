@@ -1,4 +1,4 @@
-import { appConfig } from "../config/app";
+import { appConfig, getCandidateChatUrls, normalizeChatApiUrl } from "../config/app";
 import { storage } from "./storage";
 import { AiApiMessage, AiApiPayload, ChatAttachment, ChatMessage, NeuralMode } from "../types";
 
@@ -100,7 +100,7 @@ function buildUserMessageWithAttachments(text: string, attachments: ChatAttachme
 
 async function getRuntimeAiConfig() {
   const settings = await storage.getSettings();
-  const aiApiUrl = normalizeString(settings.remoteAiUrl || appConfig.aiApiUrl);
+  const aiApiUrl = normalizeChatApiUrl(settings.remoteAiUrl || appConfig.aiApiUrl);
   const aiApiKey = normalizeString(settings.remoteAiKey || appConfig.aiApiKey);
   const remoteAiEnabled =
     typeof settings.remoteAiEnabled === "boolean"
@@ -122,39 +122,55 @@ async function getRemoteAssistantReply(payload: AiApiPayload) {
     return null;
   }
 
-  try {
-    const response = await fetch(runtimeConfig.aiApiUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(runtimeConfig.aiApiKey
-          ? { Authorization: `Bearer ${runtimeConfig.aiApiKey}` }
-          : {})
-      },
-      body: JSON.stringify(payload)
-    });
+  const candidateUrls = getCandidateChatUrls(runtimeConfig.aiApiUrl);
+  let lastError: unknown = null;
 
-    if (!response.ok) {
-      const errorDetails = await readRemoteErrorMessage(response);
+  for (const chatUrl of candidateUrls) {
+    try {
+      const response = await fetch(chatUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(runtimeConfig.aiApiKey
+            ? { Authorization: `Bearer ${runtimeConfig.aiApiKey}` }
+            : {})
+        },
+        body: JSON.stringify(payload)
+      });
 
-      if (response.status === 401) {
+      if (response.status >= 502 && response.status <= 504 && candidateUrls.length > 1) {
+        lastError = new Error(`AI API returned ${response.status}`);
+        continue;
+      }
+
+      if (!response.ok) {
+        const errorDetails = await readRemoteErrorMessage(response);
+
+        if (response.status === 401) {
+          throw new Error(
+            `AI API returned 401${errorDetails ? `: ${errorDetails}` : ""}. Check aiApiKey in app.json against CHAT_SERVER_API_KEY in server/.env`
+          );
+        }
+
         throw new Error(
-          `AI API returned 401${errorDetails ? `: ${errorDetails}` : ""}. Check aiApiKey in app.json against CHAT_SERVER_API_KEY in server/.env`
+          `AI API returned ${response.status}${errorDetails ? `: ${errorDetails}` : ""}`
         );
       }
 
-      throw new Error(
-        `AI API returned ${response.status}${errorDetails ? `: ${errorDetails}` : ""}`
-      );
+      const data = (await response.json()) as RemoteAiResponse;
+      return data.reply?.trim() || data.message?.trim() || data.text?.trim() || null;
+    } catch (error) {
+      lastError = error;
+      const msg = error instanceof Error ? error.message : "";
+      if (msg.includes("AI API returned")) {
+        break;
+      }
     }
-
-    const data = (await response.json()) as RemoteAiResponse;
-    return data.reply?.trim() || data.message?.trim() || data.text?.trim() || null;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unexpected remote AI error";
-    console.warn("Remote AI request failed.", error);
-    throw new Error(toUserFacingRemoteAiError(message));
   }
+
+  const message = lastError instanceof Error ? lastError.message : "Unexpected remote AI error";
+  console.warn("Remote AI request failed.", lastError);
+  throw new Error(toUserFacingRemoteAiError(message));
 }
 
 function toUserFacingRemoteAiError(message: string) {

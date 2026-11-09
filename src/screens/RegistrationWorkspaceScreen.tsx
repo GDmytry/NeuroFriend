@@ -109,6 +109,12 @@ export function RegistrationWorkspaceScreen({ navigation }: Props) {
                     loading={loading}
                   />
                   <NeuroButton
+                    title="Настройки сервера"
+                    onPress={() => navigation.navigate("Settings")}
+                    compact
+                    style={styles.backButton}
+                  />
+                  <NeuroButton
                     title="Назад"
                     onPress={() => navigation.goBack()}
                     compact

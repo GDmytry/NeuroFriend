@@ -1,6 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Platform } from "react-native";
 
-import { appConfig } from "../config/app";
+import { ACTIVE_TUNNEL_CHAT_URL, appConfig, normalizeChatApiUrl } from "../config/app";
 import {
   AppSettings,
   AuthSession,
@@ -84,9 +85,47 @@ function normalizeThread(thread: ChatThread): ChatThread {
 }
 
 function normalizeSettings(settings: AppSettings | null | undefined): AppSettings {
-  return {
+  const merged: AppSettings = {
     ...DEFAULT_SETTINGS,
     ...(settings ?? {})
+  };
+
+  let nextUrl = normalizeChatApiUrl(merged.remoteAiUrl);
+
+  if (!nextUrl) {
+    nextUrl = DEFAULT_SETTINGS.remoteAiUrl;
+  }
+
+  if (
+    ACTIVE_TUNNEL_CHAT_URL &&
+    (nextUrl.includes(".lhr.life") ||
+      nextUrl.includes(".trycloudflare.com") ||
+      nextUrl.includes("nelinux.taildbcf93.ts.net"))
+  ) {
+    nextUrl = normalizeChatApiUrl(ACTIVE_TUNNEL_CHAT_URL);
+  }
+
+  if (
+    Platform.OS === "web" &&
+    typeof window !== "undefined" &&
+    (window.location?.hostname === "localhost" || window.location?.hostname === "127.0.0.1")
+  ) {
+    nextUrl = `http://${window.location.hostname}:3001/chat`;
+  }
+
+  return {
+    themePreference:
+      merged.themePreference === "light" ||
+      merged.themePreference === "dark" ||
+      merged.themePreference === "system"
+        ? merged.themePreference
+        : "system",
+    remoteAiEnabled:
+      typeof merged.remoteAiEnabled === "boolean"
+        ? merged.remoteAiEnabled
+        : DEFAULT_SETTINGS.remoteAiEnabled,
+    remoteAiUrl: nextUrl,
+    remoteAiKey: (merged.remoteAiKey ?? DEFAULT_SETTINGS.remoteAiKey).trim()
   };
 }
 

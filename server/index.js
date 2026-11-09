@@ -1,5 +1,7 @@
 const { createServer } = require("node:http");
-const { existsSync, readFileSync } = require("node:fs");
+const { spawn } = require("node:child_process");
+const { existsSync, readFileSync, writeFileSync } = require("node:fs");
+const { networkInterfaces } = require("node:os");
 const { join } = require("node:path");
 const {
   createSession,
@@ -20,7 +22,7 @@ const config = {
   port: Number(process.env.CHAT_SERVER_PORT || 3001),
   apiKey: (process.env.CHAT_SERVER_API_KEY || "").trim(),
   ollamaBaseUrl: stripTrailingSlash(process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434"),
-  ollamaModel: (process.env.OLLAMA_MODEL || "qwen3:8b").trim(),
+  ollamaModel: (process.env.OLLAMA_MODEL || "qwen3.5:4b").trim(),
   ollamaKeepAlive: (process.env.OLLAMA_KEEP_ALIVE || "10m").trim(),
   ollamaThink: normalizeThink(process.env.OLLAMA_THINK),
   ollamaNumPredict: Number(process.env.OLLAMA_NUM_PREDICT || 220),
@@ -180,14 +182,22 @@ const server = createServer(async (request, response) => {
   }
 });
 
+let publicTunnelBaseUrl = "";
+
 server.listen(config.port, config.host, () => {
+  const lanAddresses = getLanAddresses();
   console.log(
     `[neuro-chat-server] Listening on http://${config.host}:${config.port} -> ${config.ollamaBaseUrl}`
   );
+  console.log(`[neuro-chat-server] PC URL:    http://localhost:${config.port}/chat`);
+  for (const ip of lanAddresses) {
+    console.log(`[neuro-chat-server] Phone URL: http://${ip}:${config.port}/chat`);
+  }
   console.log(`[neuro-chat-server] Model: ${config.ollamaModel}`);
   console.log(
     `[neuro-chat-server] Auth: ${config.apiKey ? "Bearer token enabled" : "disabled"}`
   );
+  startPublicSshTunnel();
 });
 
 async function handleRegister(body, response) {
@@ -293,6 +303,10 @@ async function handleDeleteThread(request, threadId, response) {
 }
 
 async function handleHealth(response) {
+  const lanAddresses = getLanAddresses();
+  const lanChatUrls = lanAddresses.map((ip) => `http://${ip}:${config.port}/chat`);
+  const publicChatUrl = publicTunnelBaseUrl ? `${publicTunnelBaseUrl}/chat` : null;
+
   try {
     const tagsResponse = await fetch(`${config.ollamaBaseUrl}/api/tags`);
 
@@ -304,15 +318,19 @@ async function handleHealth(response) {
     const modelNames = Array.isArray(tagsPayload.models)
       ? tagsPayload.models.map((item) => item.name)
       : [];
-    const modelAvailable = modelNames.includes(config.ollamaModel);
+    const activeModel = resolveActiveModel(modelNames);
+    const modelAvailable = Boolean(activeModel);
 
     sendJson(response, 200, {
       ok: modelAvailable,
       ollamaReachable: true,
       ollamaBaseUrl: config.ollamaBaseUrl,
-      ollamaModel: config.ollamaModel,
+      ollamaModel: activeModel || config.ollamaModel,
+      configuredModel: config.ollamaModel,
       modelAvailable,
       installedModels: modelNames,
+      lanChatUrls,
+      publicChatUrl,
       error: modelAvailable
         ? null
         : `Model "${config.ollamaModel}" is not installed or not visible to Ollama`
@@ -323,6 +341,8 @@ async function handleHealth(response) {
       ollamaReachable: false,
       ollamaBaseUrl: config.ollamaBaseUrl,
       ollamaModel: config.ollamaModel,
+      lanChatUrls,
+      publicChatUrl,
       error: getErrorMessage(error)
     });
   }
@@ -331,23 +351,30 @@ async function handleHealth(response) {
 async function handleChat(body, response, meta) {
   validateChatPayload(body);
 
-  const ollamaResponse = await fetch(`${config.ollamaBaseUrl}/api/chat`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      model: config.ollamaModel,
-      messages: body.messages,
-      stream: false,
-      keep_alive: config.ollamaKeepAlive,
-      think: config.ollamaThink,
-      options: {
-        num_predict: config.ollamaNumPredict,
-        temperature: config.ollamaTemperature
+  let targetModel = config.ollamaModel;
+  let ollamaResponse = await sendOllamaChatRequest(targetModel, body.messages);
+
+  if (ollamaResponse.status === 404) {
+    try {
+      const tagsResponse = await fetch(`${config.ollamaBaseUrl}/api/tags`);
+      if (tagsResponse.ok) {
+        const tagsPayload = await tagsResponse.json();
+        const modelNames = Array.isArray(tagsPayload.models)
+          ? tagsPayload.models.map((item) => item.name)
+          : [];
+        const fallbackModel = resolveActiveModel(modelNames);
+        if (fallbackModel && fallbackModel !== targetModel) {
+          console.log(
+            `[neuro-chat-server] Model "${targetModel}" not found, falling back to "${fallbackModel}"`
+          );
+          targetModel = fallbackModel;
+          ollamaResponse = await sendOllamaChatRequest(targetModel, body.messages);
+        }
       }
-    })
-  });
+    } catch {
+      // Keep original 404 response if tags lookup fails
+    }
+  }
 
   if (!ollamaResponse.ok) {
     const errorText = await safeReadText(ollamaResponse);
@@ -359,7 +386,8 @@ async function handleChat(body, response, meta) {
   }
 
   const data = await ollamaResponse.json();
-  const reply = data?.message?.content?.trim();
+  const rawContent = data?.message?.content || "";
+  const reply = stripThinkingTags(rawContent).trim();
 
   if (!reply) {
     throw new Error("Ollama returned an empty chat response");
@@ -368,15 +396,158 @@ async function handleChat(body, response, meta) {
   sendJson(response, 200, {
     ok: true,
     reply,
-    model: data.model || config.ollamaModel,
+    model: data.model || targetModel,
     totalDuration: data.total_duration || null,
     evalCount: data.eval_count || null
   });
 
   const elapsedMs = Date.now() - meta.requestStartedAt;
   console.log(
-    `[neuro-chat-server] Completed /chat for ${meta.clientAddress} in ${elapsedMs}ms`
+    `[neuro-chat-server] Completed /chat for ${meta.clientAddress} (${targetModel}) in ${elapsedMs}ms`
   );
+}
+
+function sendOllamaChatRequest(model, messages) {
+  return fetch(`${config.ollamaBaseUrl}/api/chat`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      model,
+      messages,
+      stream: false,
+      keep_alive: config.ollamaKeepAlive,
+      think: config.ollamaThink,
+      options: {
+        num_predict: config.ollamaNumPredict,
+        temperature: config.ollamaTemperature
+      }
+    })
+  });
+}
+
+function resolveActiveModel(modelNames) {
+  if (!Array.isArray(modelNames) || modelNames.length === 0) {
+    return null;
+  }
+
+  if (modelNames.includes(config.ollamaModel)) {
+    return config.ollamaModel;
+  }
+
+  const normalizedTarget = config.ollamaModel.toLowerCase().replace(/\s+/g, "");
+  const exactCi = modelNames.find(
+    (name) => String(name).toLowerCase().replace(/\s+/g, "") === normalizedTarget
+  );
+  if (exactCi) {
+    return exactCi;
+  }
+
+  const qwen35 = modelNames.find((name) => String(name).toLowerCase().startsWith("qwen3.5"));
+  if (qwen35) {
+    return qwen35;
+  }
+
+  const anyQwen = modelNames.find((name) => String(name).toLowerCase().startsWith("qwen"));
+  if (anyQwen) {
+    return anyQwen;
+  }
+
+  return modelNames[0];
+}
+
+function stripThinkingTags(text) {
+  return String(text || "").replace(/<think>[\s\S]*?<\/think>/gi, "");
+}
+
+function getLanAddresses() {
+  const interfaces = networkInterfaces();
+  const addresses = [];
+
+  for (const entries of Object.values(interfaces)) {
+    if (!Array.isArray(entries)) {
+      continue;
+    }
+
+    for (const entry of entries) {
+      if (
+        entry &&
+        entry.family === "IPv4" &&
+        !entry.internal &&
+        !entry.address.startsWith("169.254.")
+      ) {
+        addresses.push(entry.address);
+      }
+    }
+  }
+
+  return addresses;
+}
+
+function startPublicSshTunnel() {
+  try {
+    const child = spawn(
+      "ssh.exe",
+      [
+        "-T",
+        "-o",
+        "StrictHostKeyChecking=no",
+        "-o",
+        "UserKnownHostsFile=NUL",
+        "-o",
+        "ServerAliveInterval=30",
+        "-R",
+        `80:127.0.0.1:${config.port}`,
+        "nokey@localhost.run"
+      ],
+      {
+        stdio: ["ignore", "pipe", "pipe"],
+        windowsHide: true
+      }
+    );
+
+    const handleOutput = (chunk) => {
+      const text = String(chunk || "");
+      const match = /tunneled with tls termination,\s*(https:\/\/[a-z0-9-]+\.lhr\.life)/i.exec(text);
+      if (match && match[1] && match[1] !== publicTunnelBaseUrl) {
+        publicTunnelBaseUrl = match[1];
+        const chatUrl = `${publicTunnelBaseUrl}/chat`;
+        console.log(`[neuro-chat-server] Public HTTPS Tunnel (for Phone): ${chatUrl}`);
+        persistTunnelChatUrl(chatUrl);
+      }
+    };
+
+    child.stdout.on("data", handleOutput);
+    child.stderr.on("data", handleOutput);
+    child.on("error", () => {});
+
+    process.on("exit", () => {
+      try {
+        child.kill();
+      } catch {}
+    });
+  } catch {
+    // Ignore tunnel startup errors
+  }
+}
+
+function persistTunnelChatUrl(chatUrl) {
+  try {
+    const tunnelJsonPath = join(__dirname, "..", "src", "config", "tunnelUrl.json");
+    writeFileSync(tunnelJsonPath, JSON.stringify({ chatUrl }, null, 2), "utf8");
+  } catch {}
+
+  try {
+    const appJsonPath = join(__dirname, "..", "app.json");
+    if (existsSync(appJsonPath)) {
+      const appJson = JSON.parse(readFileSync(appJsonPath, "utf8"));
+      if (appJson && appJson.expo && appJson.expo.extra) {
+        appJson.expo.extra.aiApiUrl = chatUrl;
+        writeFileSync(appJsonPath, `${JSON.stringify(appJson, null, 2)}\n`, "utf8");
+      }
+    }
+  } catch {}
 }
 
 function validateChatPayload(body) {
@@ -443,8 +614,14 @@ function createHttpError(statusCode, message) {
 
 function setCorsHeaders(response) {
   response.setHeader("Access-Control-Allow-Origin", "*");
-  response.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  response.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  response.setHeader(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization, X-Session-Token"
+  );
+  response.setHeader(
+    "Access-Control-Allow-Methods",
+    "GET, POST, PATCH, PUT, DELETE, OPTIONS"
+  );
 }
 
 function sendJson(response, statusCode, payload) {
