@@ -21,14 +21,15 @@ const KEYS = {
 
 const DEFAULT_MODE: NeuralMode = "friend";
 const LEGACY_STALE_URLS = [
-  "5832fea1b0b47d.lhr.life"
+  "5832fea1b0b47d.lhr.life",
+  "dmwind.taildbcf93.ts.net"
 ];
 
 const DEFAULT_SETTINGS: AppSettings = {
   themePreference: "system",
   remoteAiEnabled: appConfig.hasRemoteAi && !appConfig.useMockAi,
   remoteAiUrl: appConfig.aiApiUrl,
-  remoteAiTailscaleUrl: "",
+  remoteAiTailscaleUrl: appConfig.aiTailscaleUrl,
   remoteAiKey: appConfig.aiApiKey,
   remoteAiModel: ""
 };
@@ -117,6 +118,14 @@ function normalizeSettings(settings: AppSettings | null | undefined): AppSetting
     nextUrl = `http://${window.location.hostname}:3001/chat`;
   }
 
+  let nextTailscaleUrl = normalizeChatApiUrl(merged.remoteAiTailscaleUrl ?? "");
+  if (
+    !nextTailscaleUrl ||
+    LEGACY_STALE_URLS.some((stale) => nextTailscaleUrl.includes(stale))
+  ) {
+    nextTailscaleUrl = appConfig.aiTailscaleUrl;
+  }
+
   return {
     themePreference:
       merged.themePreference === "light" ||
@@ -129,7 +138,7 @@ function normalizeSettings(settings: AppSettings | null | undefined): AppSetting
         ? merged.remoteAiEnabled
         : DEFAULT_SETTINGS.remoteAiEnabled,
     remoteAiUrl: nextUrl,
-    remoteAiTailscaleUrl: normalizeChatApiUrl(merged.remoteAiTailscaleUrl ?? ""),
+    remoteAiTailscaleUrl: nextTailscaleUrl,
     remoteAiKey: (merged.remoteAiKey ?? DEFAULT_SETTINGS.remoteAiKey).trim(),
     remoteAiModel: (merged.remoteAiModel ?? "").trim()
   };

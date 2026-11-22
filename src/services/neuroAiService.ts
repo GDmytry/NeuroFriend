@@ -115,7 +115,9 @@ function buildUserMessageWithAttachments(text: string, attachments: ChatAttachme
 async function getRuntimeAiConfig() {
   const settings = await storage.getSettings();
   const aiApiUrl = normalizeChatApiUrl(settings.remoteAiUrl || appConfig.aiApiUrl);
-  const aiTailscaleUrl = normalizeChatApiUrl(settings.remoteAiTailscaleUrl || "");
+  const aiTailscaleUrl = normalizeChatApiUrl(
+    settings.remoteAiTailscaleUrl || appConfig.aiTailscaleUrl
+  );
   const aiApiKey = normalizeString(settings.remoteAiKey || appConfig.aiApiKey);
   const aiModel = normalizeString(settings.remoteAiModel);
   const remoteAiEnabled =

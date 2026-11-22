@@ -6,10 +6,12 @@ import tunnelConfig from "./tunnelUrl.json";
 type AppExtra = {
   useMockAi?: boolean;
   aiApiUrl?: string;
+  aiTailscaleUrl?: string;
   aiApiKey?: string;
 };
 
 export const DEFAULT_BRIDGE_PORT = 3001;
+export const DEFAULT_TAILSCALE_CHAT_URL = "http://79.98.139.16:3001/chat";
 
 function normalizeString(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
@@ -37,6 +39,7 @@ function getExpoLanHost(): string {
 }
 
 export const FALLBACK_CHAT_URLS = [
+  DEFAULT_TAILSCALE_CHAT_URL,
   ...(ACTIVE_TUNNEL_CHAT_URL ? [ACTIVE_TUNNEL_CHAT_URL] : []),
   ...(Platform.OS === "android" ? [`http://10.0.2.2:${DEFAULT_BRIDGE_PORT}/chat`] : []),
   `http://localhost:${DEFAULT_BRIDGE_PORT}/chat`,
@@ -159,12 +162,15 @@ function detectRuntimeDefaultChatUrl(configuredUrl: string): string {
 const extra = (Constants.expoConfig?.extra ?? {}) as AppExtra;
 const configuredAiApiUrl = normalizeChatApiUrl(extra.aiApiUrl);
 const aiApiUrl = detectRuntimeDefaultChatUrl(configuredAiApiUrl);
+const aiTailscaleUrl =
+  normalizeChatApiUrl(extra.aiTailscaleUrl) || DEFAULT_TAILSCALE_CHAT_URL;
 const aiApiKey = normalizeString(extra.aiApiKey);
 
 export const appConfig = {
   appName: Constants.expoConfig?.name ?? "Neuro Chat",
   useMockAi: extra.useMockAi === true,
   aiApiUrl,
+  aiTailscaleUrl,
   aiApiKey,
-  hasRemoteAi: aiApiUrl.length > 0
+  hasRemoteAi: aiApiUrl.length > 0 || aiTailscaleUrl.length > 0
 };

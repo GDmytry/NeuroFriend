@@ -26,7 +26,7 @@ const defaultSettings: AppSettings = {
   themePreference: "system",
   remoteAiEnabled: appConfig.hasRemoteAi && !appConfig.useMockAi,
   remoteAiUrl: appConfig.aiApiUrl,
-  remoteAiTailscaleUrl: "",
+  remoteAiTailscaleUrl: appConfig.aiTailscaleUrl,
   remoteAiKey: appConfig.aiApiKey,
   remoteAiModel: ""
 };

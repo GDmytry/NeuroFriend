@@ -1,4 +1,9 @@
-import { appConfig, deriveServerBaseUrl, getCandidateBaseUrls } from "../config/app";
+import {
+  appConfig,
+  deriveServerBaseUrl,
+  getCandidateBaseUrls,
+  isPrivateLanUrl
+} from "../config/app";
 import { storage } from "./storage";
 import {
   ChatThread,
@@ -72,7 +77,9 @@ function normalizeString(value: unknown) {
 async function getRuntimeServerConfig(): Promise<ServerRuntimeConfig> {
   const settings = await storage.getSettings();
   const aiApiUrl = normalizeString(settings.remoteAiUrl || appConfig.aiApiUrl);
-  const aiTailscaleUrl = normalizeString(settings.remoteAiTailscaleUrl || "");
+  const aiTailscaleUrl = normalizeString(
+    settings.remoteAiTailscaleUrl || appConfig.aiTailscaleUrl
+  );
   const candidateBaseUrls = getCandidateBaseUrls(aiApiUrl, aiTailscaleUrl);
   const baseUrl =
     candidateBaseUrls[0] || deriveServerBaseUrl(aiApiUrl) || deriveServerBaseUrl(aiTailscaleUrl);
@@ -168,22 +175,31 @@ async function requestJson<T>(
   const urlsToTry = config.candidateBaseUrls.length
     ? config.candidateBaseUrls
     : [config.baseUrl];
+  const hasRemoteFallback = urlsToTry.some((url) => !isPrivateLanUrl(url));
 
   let lastNetworkError: unknown = null;
+  let lastTestedBaseUrl = config.baseUrl;
 
   for (const baseUrl of urlsToTry) {
     let response: Response;
+    const timeoutMs =
+      hasRemoteFallback && isPrivateLanUrl(baseUrl) ? 2_500 : 15_000;
+    lastTestedBaseUrl = baseUrl;
 
     try {
-      response = await fetchWithTimeout(`${baseUrl}${pathname}`, {
-        method: options.method ?? "GET",
-        headers: {
-          "Content-Type": "application/json",
-          ...(config.apiKey ? { Authorization: `Bearer ${config.apiKey}` } : {}),
-          ...(options.sessionToken ? { "X-Session-Token": options.sessionToken } : {})
+      response = await fetchWithTimeout(
+        `${baseUrl}${pathname}`,
+        {
+          method: options.method ?? "GET",
+          headers: {
+            "Content-Type": "application/json",
+            ...(config.apiKey ? { Authorization: `Bearer ${config.apiKey}` } : {}),
+            ...(options.sessionToken ? { "X-Session-Token": options.sessionToken } : {})
+          },
+          body: options.body === undefined ? undefined : JSON.stringify(options.body)
         },
-        body: options.body === undefined ? undefined : JSON.stringify(options.body)
-      });
+        timeoutMs
+      );
     } catch (error) {
       lastNetworkError = error;
       continue;
@@ -205,7 +221,7 @@ async function requestJson<T>(
 
   const rawMsg =
     lastNetworkError instanceof Error ? lastNetworkError.message : "Network request failed";
-  throw new Error(toUserFacingServerError(rawMsg, config.baseUrl));
+  throw new Error(toUserFacingServerError(rawMsg, lastTestedBaseUrl));
 }
 
 async function readErrorText(response: Response) {
@@ -246,7 +262,10 @@ export async function checkServerHealth(
     };
   }
 
+  const hasRemoteFallback = urlsToTry.some((url) => !isPrivateLanUrl(url));
   let primaryError = "";
+  let remoteError = "";
+  let remoteBaseUrl = "";
   let lastError = "Network request failed";
   const primaryBaseUrl = customUrl
     ? deriveServerBaseUrl(customUrl)
@@ -255,12 +274,19 @@ export async function checkServerHealth(
       : config.baseUrl;
 
   for (const baseUrl of urlsToTry) {
+    const isLan = isPrivateLanUrl(baseUrl);
+    const timeoutMs = hasRemoteFallback && isLan ? 2_500 : 15_000;
+
     try {
-      const response = await fetchWithTimeout(`${baseUrl}/health`, { method: "GET" }, 8_000);
+      const response = await fetchWithTimeout(`${baseUrl}/health`, { method: "GET" }, timeoutMs);
       if (!response.ok && response.status !== 503) {
         lastError = `Status ${response.status}`;
         if (baseUrl === primaryBaseUrl && !primaryError) {
           primaryError = lastError;
+        }
+        if (!isLan && !remoteError) {
+          remoteError = lastError;
+          remoteBaseUrl = baseUrl;
         }
         continue;
       }
@@ -311,14 +337,21 @@ export async function checkServerHealth(
       if (baseUrl === primaryBaseUrl && !primaryError) {
         primaryError = lastError;
       }
+      if (!isLan && !remoteError) {
+        remoteError = lastError;
+        remoteBaseUrl = baseUrl;
+      }
     }
   }
+
+  const reportedBaseUrl = remoteBaseUrl || primaryBaseUrl;
+  const reportedError = remoteError || primaryError || lastError;
 
   return {
     ok: false,
     reachable: false,
-    baseUrl: primaryBaseUrl,
-    error: toUserFacingServerError(primaryError || lastError, primaryBaseUrl)
+    baseUrl: reportedBaseUrl,
+    error: toUserFacingServerError(reportedError, reportedBaseUrl)
   };
 }
 

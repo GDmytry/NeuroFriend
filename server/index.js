@@ -201,6 +201,9 @@ const server = createServer(async (request, response) => {
 
 let publicTunnelBaseUrl = "";
 let tunnelProcess = null;
+let vpsTunnelProcess = null;
+let vpsReconnectTimer = null;
+let isShuttingDown = false;
 let tailscaleState = {
   available: false,
   dnsName: "",
@@ -240,6 +243,12 @@ server.listen(config.port, config.host, () => {
   for (const ip of lanAddresses) {
     console.log(`  Wi-Fi URL: http://${ip}:${config.port}/chat`);
   }
+  if (config.vpsPublicUrl) {
+    const vpsChatUrl = config.vpsPublicUrl.endsWith("/chat")
+      ? config.vpsPublicUrl
+      : `${config.vpsPublicUrl}/chat`;
+    console.log(`  VPS URL:   ${vpsChatUrl}`);
+  }
   if (tailscaleState.httpsChatUrl) {
     console.log(
       `  Tailscale (${tailscaleState.mode || "HTTPS"}): ${tailscaleState.httpsChatUrl}`
@@ -255,6 +264,10 @@ server.listen(config.port, config.host, () => {
   console.log("=========================================================");
 
   void logInitialLlmProbe();
+
+  if (config.vpsSshTarget) {
+    startVpsReverseTunnel();
+  }
 
   if (config.enablePublicTunnel) {
     startPublicSshTunnel();
@@ -410,7 +423,15 @@ async function handleModels(response) {
 async function handleHealth(response) {
   const lanAddresses = getLanAddresses();
   const lanChatUrls = lanAddresses.map((ip) => `http://${ip}:${config.port}/chat`);
-  const publicChatUrl = publicTunnelBaseUrl ? `${publicTunnelBaseUrl}/chat` : null;
+  const vpsChatUrl = config.vpsPublicUrl
+    ? config.vpsPublicUrl.endsWith("/chat")
+      ? config.vpsPublicUrl
+      : `${config.vpsPublicUrl}/chat`
+    : null;
+  const publicChatUrl =
+    vpsChatUrl ||
+    (publicTunnelBaseUrl ? `${publicTunnelBaseUrl}/chat` : null) ||
+    (tailscaleState.mode === "Funnel" ? tailscaleState.httpsChatUrl : null);
 
   try {
     const runtime = await resolveLlmRuntime(config);
@@ -686,6 +707,78 @@ function setupTailscaleAccess() {
   return result;
 }
 
+function startVpsReverseTunnel() {
+  if (isShuttingDown || !config.vpsSshTarget) {
+    return;
+  }
+
+  const isWindows = process.platform === "win32";
+  const sshBin = isWindows ? "ssh.exe" : "ssh";
+  const sshArgs = [
+    "-N",
+    "-o",
+    "ExitOnForwardFailure=yes",
+    "-o",
+    "ServerAliveInterval=30",
+    "-o",
+    "ServerAliveCountMax=3",
+    "-o",
+    "StrictHostKeyChecking=accept-new"
+  ];
+
+  if (config.vpsSshPort && config.vpsSshPort !== 22) {
+    sshArgs.push("-p", String(config.vpsSshPort));
+  }
+
+  if (config.vpsSshKey) {
+    sshArgs.push("-i", config.vpsSshKey);
+  }
+
+  sshArgs.push(
+    "-R",
+    `127.0.0.1:${config.vpsRemotePort}:127.0.0.1:${config.port}`,
+    config.vpsSshTarget
+  );
+
+  console.log(
+    `[neuro-chat-server] Connecting VPS SSH tunnel -> ${config.vpsSshTarget} (remote :${config.vpsRemotePort} -> local :${config.port})...`
+  );
+
+  const child = spawn(sshBin, sshArgs, {
+    stdio: "inherit",
+    windowsHide: false
+  });
+
+  vpsTunnelProcess = child;
+
+  child.on("error", (error) => {
+    console.warn(`[neuro-chat-server] VPS SSH tunnel error: ${getErrorMessage(error)}`);
+    scheduleVpsReconnect();
+  });
+
+  child.on("exit", (code, signal) => {
+    vpsTunnelProcess = null;
+    if (isShuttingDown) {
+      return;
+    }
+    console.warn(
+      `[neuro-chat-server] VPS SSH tunnel closed (code=${code ?? "null"}${signal ? `, signal=${signal}` : ""}). Reconnecting in 5s...`
+    );
+    scheduleVpsReconnect();
+  });
+}
+
+function scheduleVpsReconnect() {
+  if (isShuttingDown || vpsReconnectTimer) {
+    return;
+  }
+
+  vpsReconnectTimer = setTimeout(() => {
+    vpsReconnectTimer = null;
+    startVpsReverseTunnel();
+  }, 5_000);
+}
+
 function startPublicSshTunnel() {
   try {
     const isWindows = process.platform === "win32";
@@ -745,6 +838,17 @@ function persistTunnelChatUrl(chatUrl) {
 }
 
 function shutdown() {
+  isShuttingDown = true;
+  if (vpsReconnectTimer) {
+    clearTimeout(vpsReconnectTimer);
+    vpsReconnectTimer = null;
+  }
+  if (vpsTunnelProcess) {
+    try {
+      vpsTunnelProcess.kill();
+    } catch {}
+    vpsTunnelProcess = null;
+  }
   if (tunnelProcess) {
     try {
       tunnelProcess.kill();
