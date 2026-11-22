@@ -130,6 +130,22 @@ function normalizeTemperature(value, fallback) {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
+const DEFAULT_SYSTEM_APPEND =
+  "Отвечай развернуто и содержательно: пиши примерно 5–15 предложений, раскрывай мысль подробно, с пояснениями, аргументами или живыми примерами. Не ограничивайся одним-двумя предложениями, если только пользователь сам прямо не попросил ответить кратко.";
+
+function normalizeSystemAppend(value) {
+  if (value === undefined) {
+    return DEFAULT_SYSTEM_APPEND;
+  }
+
+  const trimmed = String(value).trim();
+  if (!trimmed || ["off", "none", "false", "0"].includes(trimmed.toLowerCase())) {
+    return "";
+  }
+
+  return trimmed;
+}
+
 function getServerConfig() {
   const configuredBaseUrl = normalizeBaseUrl(process.env.LLM_BASE_URL || process.env.OLLAMA_BASE_URL || "");
   const configuredModel = normalizeModelSetting(process.env.LLM_MODEL || process.env.OLLAMA_MODEL || "");
@@ -143,9 +159,10 @@ function getServerConfig() {
     llmBaseUrl: configuredBaseUrl,
     llmModel: configuredModel,
     llmApiKey: (process.env.LLM_API_KEY || "").trim(),
-    llmMaxTokens: normalizeNumber(process.env.LLM_MAX_TOKENS || process.env.OLLAMA_NUM_PREDICT, 1024),
-    llmTemperature: normalizeTemperature(process.env.LLM_TEMPERATURE ?? process.env.OLLAMA_TEMPERATURE, 0.6),
+    llmMaxTokens: normalizeNumber(process.env.LLM_MAX_TOKENS || process.env.OLLAMA_NUM_PREDICT, 1536),
+    llmTemperature: normalizeTemperature(process.env.LLM_TEMPERATURE ?? process.env.OLLAMA_TEMPERATURE, 0.7),
     llmTimeoutMs: normalizeNumber(process.env.LLM_TIMEOUT_MS, 120_000),
+    llmSystemAppend: normalizeSystemAppend(process.env.LLM_SYSTEM_APPEND),
     ollamaKeepAlive: (process.env.OLLAMA_KEEP_ALIVE || "10m").trim(),
     ollamaThink: normalizeThink(process.env.OLLAMA_THINK)
   };
@@ -484,7 +501,28 @@ async function sendOpenAiChat(baseUrl, model, messages, config) {
   };
 }
 
+function applySystemPromptEnhancement(messages, config) {
+  const list = Array.isArray(messages) ? messages.map((msg) => ({ ...msg })) : [];
+  const extraInstruction = config.llmSystemAppend;
+
+  if (!extraInstruction) {
+    return list;
+  }
+
+  const systemIndex = list.findIndex((msg) => msg.role === "system");
+  if (systemIndex !== -1) {
+    const existing = String(list[systemIndex].content || "");
+    if (!existing.includes("5–15 предложений") && !existing.includes(extraInstruction)) {
+      list[systemIndex].content = `${existing.trim()}\n\n${extraInstruction}`;
+    }
+    return list;
+  }
+
+  return [{ role: "system", content: extraInstruction }, ...list];
+}
+
 async function sendChatCompletion(config, messages, requestedModel = "") {
+  const preparedMessages = applySystemPromptEnhancement(messages, config);
   let runtime = null;
 
   if (!config.llmBaseUrl || config.llmProvider === "auto" || !resolveActiveModel([], requestedModel, config.llmModel)) {
@@ -504,8 +542,8 @@ async function sendChatCompletion(config, messages, requestedModel = "") {
 
   const execute = (modelToUse) =>
     provider === "ollama"
-      ? sendOllamaChat(baseUrl, modelToUse, messages, config)
-      : sendOpenAiChat(baseUrl, modelToUse, messages, config);
+      ? sendOllamaChat(baseUrl, modelToUse, preparedMessages, config)
+      : sendOpenAiChat(baseUrl, modelToUse, preparedMessages, config);
 
   try {
     return await execute(targetModel);
