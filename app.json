@@ -26,8 +26,8 @@
     },
     "extra": {
       "useMockAi": false,
-      "aiApiUrl": "http://192.168.3.145:3001/chat",
-      "aiTailscaleUrl": "http://79.98.139.16:3001/chat",
+      "aiApiUrl": "https://dmwind.taildbcf93.ts.net/chat",
+      "aiTailscaleUrl": "https://dmwind.taildbcf93.ts.net/chat",
       "aiApiKey": "",
       "eas": {
         "projectId": "0943255e-8d0e-4499-8acb-fa0e4128938f"

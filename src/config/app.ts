@@ -11,7 +11,7 @@ type AppExtra = {
 };
 
 export const DEFAULT_BRIDGE_PORT = 3001;
-export const DEFAULT_TAILSCALE_CHAT_URL = "http://79.98.139.16:3001/chat";
+export const DEFAULT_TAILSCALE_CHAT_URL = "https://dmwind.taildbcf93.ts.net/chat";
 
 function normalizeString(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
