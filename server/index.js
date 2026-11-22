@@ -196,6 +196,20 @@ const server = createServer(async (request, response) => {
 let publicTunnelBaseUrl = "";
 let tunnelProcess = null;
 
+server.on("error", (error) => {
+  if (error && error.code === "EADDRINUSE") {
+    console.error(
+      `[neuro-chat-server] Ошибка: порт ${config.port} уже занят другим процессом.`
+    );
+    console.error(
+      "[neuro-chat-server] Возможно, сервер уже запущен. Остановите его (stop-neurofriend-stack.bat) или смените CHAT_SERVER_PORT в server/.env."
+    );
+  } else {
+    console.error(`[neuro-chat-server] Ошибка запуска сервера: ${getErrorMessage(error)}`);
+  }
+  process.exit(1);
+});
+
 server.listen(config.port, config.host, () => {
   const lanAddresses = getLanAddresses();
   const llmTargetLabel = config.llmBaseUrl

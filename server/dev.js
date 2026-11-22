@@ -1,29 +1,45 @@
 const { spawn } = require("node:child_process");
+const { existsSync } = require("node:fs");
 const { join } = require("node:path");
 
 const projectRoot = join(__dirname, "..");
 const args = process.argv.slice(2);
 const enableTunnel = args.includes("--tunnel");
 const openWeb = args.includes("--web");
+const serverOnly = args.includes("--server-only");
 const isWindows = process.platform === "win32";
 
 const children = [];
 let shuttingDown = false;
 
 function startProcess(name, command, commandArgs, options = {}) {
+  const { fatalOnExit = true, ...spawnOptions } = options;
+
   const child = spawn(command, commandArgs, {
     cwd: projectRoot,
     stdio: "inherit",
-    shell: isWindows && command !== process.execPath,
-    ...options
+    ...spawnOptions
   });
 
   children.push(child);
 
+  child.on("error", (error) => {
+    console.error(`[dev] Failed to start ${name}: ${error.message}`);
+    if (fatalOnExit) {
+      shutdown(1);
+    }
+  });
+
   child.on("exit", (code, signal) => {
-    if (!shuttingDown && code !== 0 && code !== null) {
-      console.error(`[dev] ${name} exited with code ${code}${signal ? ` (${signal})` : ""}`);
-      shutdown(code);
+    if (!shuttingDown && (code !== 0 || signal)) {
+      console.error(
+        `[dev] ${name} exited with code ${code ?? "null"}${signal ? ` (signal ${signal})` : ""}`
+      );
+      if (fatalOnExit) {
+        shutdown(typeof code === "number" && code !== 0 ? code : 1);
+      } else {
+        console.warn(`[dev] ${name} stopped, keeping LLM Bridge running.`);
+      }
     }
   });
 
@@ -35,6 +51,7 @@ function shutdown(exitCode = 0) {
     return;
   }
   shuttingDown = true;
+  process.exitCode = exitCode;
 
   for (const child of children) {
     try {
@@ -60,17 +77,37 @@ if (enableTunnel) {
   serverArgs.push("--tunnel");
 }
 
-console.log("[dev] Starting NeuroFriend Local LLM Bridge + Expo...");
-startProcess("LLM Bridge", process.execPath, serverArgs);
+console.log(
+  serverOnly
+    ? "[dev] Starting NeuroFriend Local LLM Bridge (server only)..."
+    : "[dev] Starting NeuroFriend Local LLM Bridge + Expo..."
+);
+startProcess("LLM Bridge", process.execPath, serverArgs, { fatalOnExit: true });
 
-const npxBin = isWindows ? "npx.cmd" : "npx";
-const expoArgs = ["expo", "start"];
-if (openWeb) {
-  expoArgs.push("--web");
-}
-
-setTimeout(() => {
-  if (!shuttingDown) {
-    startProcess("Expo", npxBin, expoArgs);
+if (!serverOnly) {
+  const localExpoCli = join(projectRoot, "node_modules", "expo", "bin", "cli");
+  const expoArgs = ["start"];
+  if (openWeb) {
+    expoArgs.push("--web");
   }
-}, 800);
+
+  setTimeout(() => {
+    if (shuttingDown) {
+      return;
+    }
+
+    if (existsSync(localExpoCli)) {
+      startProcess("Expo", process.execPath, [localExpoCli, ...expoArgs], {
+        fatalOnExit: false
+      });
+    } else if (isWindows) {
+      startProcess("Expo", "cmd.exe", ["/d", "/s", "/c", "npx", "expo", ...expoArgs], {
+        fatalOnExit: false
+      });
+    } else {
+      startProcess("Expo", "npx", ["expo", ...expoArgs], {
+        fatalOnExit: false
+      });
+    }
+  }, 800);
+}
