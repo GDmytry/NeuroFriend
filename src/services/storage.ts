@@ -28,6 +28,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   themePreference: "system",
   remoteAiEnabled: appConfig.hasRemoteAi && !appConfig.useMockAi,
   remoteAiUrl: appConfig.aiApiUrl,
+  remoteAiTailscaleUrl: "",
   remoteAiKey: appConfig.aiApiKey,
   remoteAiModel: ""
 };
@@ -128,6 +129,7 @@ function normalizeSettings(settings: AppSettings | null | undefined): AppSetting
         ? merged.remoteAiEnabled
         : DEFAULT_SETTINGS.remoteAiEnabled,
     remoteAiUrl: nextUrl,
+    remoteAiTailscaleUrl: normalizeChatApiUrl(merged.remoteAiTailscaleUrl ?? ""),
     remoteAiKey: (merged.remoteAiKey ?? DEFAULT_SETTINGS.remoteAiKey).trim(),
     remoteAiModel: (merged.remoteAiModel ?? "").trim()
   };

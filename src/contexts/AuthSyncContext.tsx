@@ -52,12 +52,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (isServerSession(storedSession) && (await hasServerSync())) {
           try {
             const resumed = await resumeServerSession(storedSession.token as string);
-            setCurrentUser(resumed.user);
+            const cachedUser = users.find((item) => item.id === resumed.user.id);
+            const mergedUser: User = {
+              ...resumed.user,
+              password: cachedUser?.password ?? ""
+            };
+            await storage.saveUsers(replaceCachedUser(users, mergedUser));
+            setCurrentUser(mergedUser);
             setSession(storedSession);
             setIsReady(true);
             return;
-          } catch {
-            await storage.saveSession(null);
+          } catch (error) {
+            const message = error instanceof Error ? error.message : "";
+            const isExplicitAuthRejection =
+              message.includes("Invalid or expired session") ||
+              message.includes("Session token is required");
+            if (isExplicitAuthRejection) {
+              await storage.saveSession(null);
+            }
           }
         }
 
@@ -67,7 +79,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (!localUser) {
           await storage.saveSession(null);
-        } else {
+        } else if (!isServerSession(storedSession)) {
           void tryUpgradeLocalSession(localUser);
         }
       }

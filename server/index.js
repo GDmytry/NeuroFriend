@@ -528,12 +528,37 @@ function getLanAddresses() {
 
 function findTailscaleBinary() {
   if (process.platform === "win32") {
-    const standardWin = "C:\\Program Files\\Tailscale\\tailscale.exe";
-    if (existsSync(standardWin)) {
-      return standardWin;
+    const candidates = [
+      "C:\\Program Files\\Tailscale\\tailscale.exe",
+      "C:\\Program Files (x86)\\Tailscale\\tailscale.exe",
+      join(process.env.LOCALAPPDATA || "", "Tailscale", "tailscale.exe")
+    ];
+    for (const candidate of candidates) {
+      if (candidate && existsSync(candidate)) {
+        return candidate;
+      }
     }
   }
   return "tailscale";
+}
+
+function findTailscaleIpFromInterfaces() {
+  const interfaces = networkInterfaces();
+  for (const entries of Object.values(interfaces)) {
+    if (!Array.isArray(entries)) {
+      continue;
+    }
+    for (const entry of entries) {
+      if (entry && entry.family === "IPv4" && !entry.internal) {
+        const parts = entry.address.split(".").map(Number);
+        // Tailscale CGNAT range: 100.64.0.0/10 (100.64.x.x - 100.127.x.x)
+        if (parts[0] === 100 && parts[1] >= 64 && parts[1] <= 127) {
+          return entry.address;
+        }
+      }
+    }
+  }
+  return "";
 }
 
 function setupTailscaleAccess() {
@@ -547,7 +572,7 @@ function setupTailscaleAccess() {
   };
 
   const tsBin = findTailscaleBinary();
-  let statusJson;
+  let statusJson = null;
   try {
     const raw = execFileSync(tsBin, ["status", "--json"], {
       encoding: "utf8",
@@ -557,17 +582,32 @@ function setupTailscaleAccess() {
     });
     statusJson = JSON.parse(raw);
   } catch {
+    // Fallback: detect Tailscale CGNAT IP directly from network interfaces
+    const fallbackIp = findTailscaleIpFromInterfaces();
+    if (fallbackIp) {
+      result.available = true;
+      result.ip = fallbackIp;
+      result.ipChatUrl = `http://${fallbackIp}:${config.port}/chat`;
+    }
     return result;
   }
 
   if (!statusJson || statusJson.BackendState !== "Running") {
+    const fallbackIp = findTailscaleIpFromInterfaces();
+    if (fallbackIp) {
+      result.available = true;
+      result.ip = fallbackIp;
+      result.ipChatUrl = `http://${fallbackIp}:${config.port}/chat`;
+    }
     return result;
   }
 
   const self = statusJson.Self || {};
   const dnsName = String(self.DNSName || "").replace(/\.+$/, "").trim();
   const ips = Array.isArray(self.TailscaleIPs) ? self.TailscaleIPs : [];
-  const ipv4 = ips.find((addr) => typeof addr === "string" && /^\d+\.\d+\.\d+\.\d+$/.test(addr)) || "";
+  const ipv4 =
+    ips.find((addr) => typeof addr === "string" && /^\d+\.\d+\.\d+\.\d+$/.test(addr)) ||
+    findTailscaleIpFromInterfaces();
 
   result.available = true;
   result.dnsName = dnsName;

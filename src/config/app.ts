@@ -101,7 +101,11 @@ export function getAutoDetectedChatUrl(): string {
   return `http://localhost:${DEFAULT_BRIDGE_PORT}/chat`;
 }
 
-export function getCandidateChatUrls(primaryUrl?: string): string[] {
+export function isPrivateLanUrl(url: string): boolean {
+  return /^http:\/\/(localhost|127\.|192\.168\.|10\.|172\.(1[6-9]|2\d|3[0-1])\.)/i.test(url);
+}
+
+export function getCandidateChatUrls(primaryUrl?: string, secondaryUrl?: string): string[] {
   const result: string[] = [];
   const addUrl = (url: unknown) => {
     const normalized = normalizeChatApiUrl(url);
@@ -110,8 +114,9 @@ export function getCandidateChatUrls(primaryUrl?: string): string[] {
     }
   };
 
-  // User-configured URL always takes top priority
+  // User-configured URLs always take top priority
   addUrl(primaryUrl);
+  addUrl(secondaryUrl);
 
   if (Platform.OS === "web" && typeof window !== "undefined" && window.location?.hostname) {
     addUrl(`http://${window.location.hostname}:${DEFAULT_BRIDGE_PORT}/chat`);
@@ -133,8 +138,8 @@ export function getCandidateChatUrls(primaryUrl?: string): string[] {
   return result;
 }
 
-export function getCandidateBaseUrls(primaryUrl?: string): string[] {
-  return getCandidateChatUrls(primaryUrl)
+export function getCandidateBaseUrls(primaryUrl?: string, secondaryUrl?: string): string[] {
+  return getCandidateChatUrls(primaryUrl, secondaryUrl)
     .map((chatUrl) => deriveServerBaseUrl(chatUrl))
     .filter(Boolean);
 }

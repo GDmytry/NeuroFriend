@@ -72,9 +72,10 @@ function normalizeString(value: unknown) {
 async function getRuntimeServerConfig(): Promise<ServerRuntimeConfig> {
   const settings = await storage.getSettings();
   const aiApiUrl = normalizeString(settings.remoteAiUrl || appConfig.aiApiUrl);
-  const aiApiKey = normalizeString(settings.remoteAiKey || appConfig.aiApiKey);
-  const candidateBaseUrls = getCandidateBaseUrls(aiApiUrl);
-  const baseUrl = candidateBaseUrls[0] || deriveServerBaseUrl(aiApiUrl);
+  const aiTailscaleUrl = normalizeString(settings.remoteAiTailscaleUrl || "");
+  const candidateBaseUrls = getCandidateBaseUrls(aiApiUrl, aiTailscaleUrl);
+  const baseUrl =
+    candidateBaseUrls[0] || deriveServerBaseUrl(aiApiUrl) || deriveServerBaseUrl(aiTailscaleUrl);
   const remoteAiEnabled =
     typeof settings.remoteAiEnabled === "boolean"
       ? settings.remoteAiEnabled
@@ -84,7 +85,7 @@ async function getRuntimeServerConfig(): Promise<ServerRuntimeConfig> {
     enabled: remoteAiEnabled && baseUrl.length > 0,
     baseUrl,
     candidateBaseUrls,
-    apiKey: aiApiKey
+    apiKey: normalizeString(settings.remoteAiKey || appConfig.aiApiKey)
   };
 }
 
@@ -133,12 +134,17 @@ function toUserFacingServerError(message: string, baseUrl: string) {
     return "Сервер отклонил запрос (401). Проверьте Bearer token в настройках сервера.";
   }
 
+  const lower = message.toLowerCase();
   if (
-    message.includes("Network request failed") ||
-    message.includes("Failed to fetch") ||
-    message.includes("aborted") ||
-    message.includes("AbortError")
+    lower.includes("network request failed") ||
+    lower.includes("failed to fetch") ||
+    lower.includes("aborted") ||
+    lower.includes("aborterror") ||
+    lower.includes("timed out")
   ) {
+    if (/^http:\/\/(192\.168\.|10\.|172\.(1[6-9]|2\d|3[0-1])\.)/.test(baseUrl)) {
+      return `Нет ответа от локального адреса (${baseUrl}). Если вы на мобильной сети (LTE), укажите Tailscale URL в настройках.`;
+    }
     return `Не удалось подключиться к серверу (${baseUrl}). Убедитесь, что сервер запущен на ПК и адрес указан верно в настройках.`;
   }
 
@@ -221,11 +227,15 @@ async function readErrorText(response: Response) {
   }
 }
 
-export async function checkServerHealth(customUrl?: string): Promise<ServerHealthStatus> {
+export async function checkServerHealth(
+  customUrl?: string,
+  secondaryUrl?: string
+): Promise<ServerHealthStatus> {
   const config = await getRuntimeServerConfig();
-  const urlsToTry = customUrl
-    ? getCandidateBaseUrls(customUrl)
-    : config.candidateBaseUrls;
+  const urlsToTry =
+    customUrl || secondaryUrl
+      ? getCandidateBaseUrls(customUrl, secondaryUrl)
+      : config.candidateBaseUrls;
 
   if (!urlsToTry.length) {
     return {
@@ -238,7 +248,11 @@ export async function checkServerHealth(customUrl?: string): Promise<ServerHealt
 
   let primaryError = "";
   let lastError = "Network request failed";
-  const primaryBaseUrl = customUrl ? deriveServerBaseUrl(customUrl) : config.baseUrl;
+  const primaryBaseUrl = customUrl
+    ? deriveServerBaseUrl(customUrl)
+    : secondaryUrl
+      ? deriveServerBaseUrl(secondaryUrl)
+      : config.baseUrl;
 
   for (const baseUrl of urlsToTry) {
     try {

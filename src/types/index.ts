@@ -84,6 +84,7 @@ export type AppSettings = {
   themePreference: ThemePreference;
   remoteAiEnabled: boolean;
   remoteAiUrl: string;
+  remoteAiTailscaleUrl?: string;
   remoteAiKey: string;
   remoteAiModel?: string;
 };

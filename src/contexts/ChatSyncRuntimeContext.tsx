@@ -65,6 +65,30 @@ function buildVisibleUserText(text: string, attachments: ChatAttachment[] = []) 
   return "";
 }
 
+function mergeThreads(localThreads: ChatThread[], serverThreads: ChatThread[]): ChatThread[] {
+  const byId = new Map<string, ChatThread>();
+
+  for (const thread of localThreads) {
+    byId.set(thread.id, thread);
+  }
+
+  for (const thread of serverThreads) {
+    const existing = byId.get(thread.id);
+    if (!existing) {
+      byId.set(thread.id, thread);
+      continue;
+    }
+
+    const existingTime = +new Date(existing.updatedAt || 0);
+    const serverTime = +new Date(thread.updatedAt || 0);
+    if (serverTime >= existingTime || thread.messages.length > existing.messages.length) {
+      byId.set(thread.id, thread);
+    }
+  }
+
+  return [...byId.values()].sort((a, b) => +new Date(b.updatedAt) - +new Date(a.updatedAt));
+}
+
 export function ChatProvider({ children, currentUser, session }: ChatProviderProps) {
   const [allThreads, setAllThreads] = useState<ChatThread[]>([]);
   const [isReady, setIsReady] = useState(false);
@@ -91,22 +115,26 @@ export function ChatProvider({ children, currentUser, session }: ChatProviderPro
       setIsReady(false);
 
       try {
+        // Always load cached local threads first so chats never disappear offline / on LTE
+        const localThreads = await storage.getThreads();
+        if (!isActive) {
+          return;
+        }
+        setAllThreads(localThreads);
+
         if (isServerSession(session) && (await hasServerSync())) {
-          const serverThreads = await fetchServerThreads(session?.token as string);
+          try {
+            const serverThreads = await fetchServerThreads(session?.token as string);
+            if (!isActive) {
+              return;
+            }
 
-          if (!isActive) {
-            return;
+            const merged = mergeThreads(localThreads, serverThreads);
+            setAllThreads(merged);
+            await storage.saveThreads(merged);
+          } catch {
+            // Server temporarily unreachable (e.g. LTE without Tailscale): keep local cache
           }
-
-          setAllThreads(serverThreads);
-        } else {
-          const localThreads = await storage.getThreads();
-
-          if (!isActive) {
-            return;
-          }
-
-          setAllThreads(localThreads);
         }
       } finally {
         if (isActive) {
@@ -172,21 +200,24 @@ export function ChatProvider({ children, currentUser, session }: ChatProviderPro
   }
 
   async function persistThread(nextThread: ChatThread) {
+    // Always persist locally first so closing the app never loses chats
+    const cachedThreads = await storage.getThreads();
+    const localUpdated = cachedThreads.some((thread) => thread.id === nextThread.id)
+      ? cachedThreads.map((thread) => (thread.id === nextThread.id ? nextThread : thread))
+      : [...cachedThreads, nextThread];
+    await persistLocal(localUpdated);
+
     if (isServerSession(session) && (await hasServerSync())) {
-      const saved = await saveServerThread(session?.token as string, nextThread);
-      setAllThreads((current) => {
-        const exists = current.some((thread) => thread.id === saved.id);
-        return exists
-          ? current.map((thread) => (thread.id === saved.id ? saved : thread))
-          : [...current, saved];
-      });
-      return saved;
+      try {
+        const saved = await saveServerThread(session?.token as string, nextThread);
+        const syncedList = localUpdated.map((thread) => (thread.id === saved.id ? saved : thread));
+        await persistLocal(syncedList);
+        return saved;
+      } catch {
+        // Keep locally saved thread if server sync fails temporarily
+      }
     }
 
-    const nextThreads = allThreads.some((thread) => thread.id === nextThread.id)
-      ? allThreads.map((thread) => (thread.id === nextThread.id ? nextThread : thread))
-      : [...allThreads, nextThread];
-    await persistLocal(nextThreads);
     return nextThread;
   }
 
@@ -232,12 +263,15 @@ export function ChatProvider({ children, currentUser, session }: ChatProviderPro
         });
       },
       deleteThread: async (threadId) => {
+        const nextThreads = allThreads.filter((thread) => thread.id !== threadId);
+        await persistLocal(nextThreads);
+
         if (isServerSession(session) && (await hasServerSync())) {
-          await deleteServerThread(session?.token as string, threadId);
-          setAllThreads((current) => current.filter((thread) => thread.id !== threadId));
-        } else {
-          const nextThreads = allThreads.filter((thread) => thread.id !== threadId);
-          await persistLocal(nextThreads);
+          try {
+            await deleteServerThread(session?.token as string, threadId);
+          } catch {
+            // Local deletion already applied
+          }
         }
 
         if (activeThreadId === threadId) {
@@ -294,7 +328,8 @@ export function ChatProvider({ children, currentUser, session }: ChatProviderPro
           mode,
           history: nextHistory,
           latestUserMessage: visibleText,
-          assistantName: currentUser.assistantName
+          assistantName: currentUser.assistantName,
+          userName: currentUser.name
         });
 
         const assistantMessage: ChatMessage = {

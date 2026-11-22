@@ -52,6 +52,9 @@ export function SettingsAppScreen({ navigation }: Props) {
   const [assistantName, setAssistantName] = useState(currentUser?.assistantName ?? "");
   const [remoteAiEnabled, setRemoteAiEnabled] = useState(settings.remoteAiEnabled);
   const [remoteAiUrl, setRemoteAiUrl] = useState(settings.remoteAiUrl);
+  const [remoteAiTailscaleUrl, setRemoteAiTailscaleUrl] = useState(
+    settings.remoteAiTailscaleUrl ?? ""
+  );
   const [remoteAiKey, setRemoteAiKey] = useState(settings.remoteAiKey);
   const [remoteAiModel, setRemoteAiModel] = useState(settings.remoteAiModel ?? "");
   const [savingAssistant, setSavingAssistant] = useState(false);
@@ -67,27 +70,39 @@ export function SettingsAppScreen({ navigation }: Props) {
   useEffect(() => {
     setRemoteAiEnabled(settings.remoteAiEnabled);
     setRemoteAiUrl(settings.remoteAiUrl);
+    setRemoteAiTailscaleUrl(settings.remoteAiTailscaleUrl ?? "");
     setRemoteAiKey(settings.remoteAiKey);
     setRemoteAiModel(settings.remoteAiModel ?? "");
-  }, [settings.remoteAiEnabled, settings.remoteAiKey, settings.remoteAiModel, settings.remoteAiUrl]);
+  }, [
+    settings.remoteAiEnabled,
+    settings.remoteAiKey,
+    settings.remoteAiModel,
+    settings.remoteAiTailscaleUrl,
+    settings.remoteAiUrl
+  ]);
 
   useEffect(() => {
-    if (settings.remoteAiUrl) {
-      void runHealthCheck(settings.remoteAiUrl);
+    if (settings.remoteAiUrl || settings.remoteAiTailscaleUrl) {
+      void runHealthCheck(settings.remoteAiUrl, settings.remoteAiTailscaleUrl);
     }
-  }, [settings.remoteAiUrl]);
+  }, [settings.remoteAiTailscaleUrl, settings.remoteAiUrl]);
 
-  async function runHealthCheck(urlToTest?: string) {
+  async function runHealthCheck(urlToTest?: string, tailscaleUrlToTest?: string) {
     const targetUrl = (urlToTest ?? remoteAiUrl).trim();
-    if (!targetUrl) {
+    const targetTailscaleUrl = (tailscaleUrlToTest ?? remoteAiTailscaleUrl).trim();
+    if (!targetUrl && !targetTailscaleUrl) {
       setHealthStatus(null);
       return;
     }
 
     try {
       setCheckingHealth(true);
-      const status = await checkServerHealth(targetUrl);
+      const status = await checkServerHealth(targetUrl, targetTailscaleUrl);
       setHealthStatus(status);
+      const discoveredTailscale = status.tailscaleChatUrl || status.tailscaleIpChatUrl || "";
+      if (status.reachable && discoveredTailscale && !targetTailscaleUrl) {
+        setRemoteAiTailscaleUrl(discoveredTailscale);
+      }
     } finally {
       setCheckingHealth(false);
     }
@@ -117,11 +132,12 @@ export function SettingsAppScreen({ navigation }: Props) {
 
   async function handleSaveAiConfig() {
     const normalizedUrl = normalizeChatApiUrl(remoteAiUrl);
+    const normalizedTailscaleUrl = normalizeChatApiUrl(remoteAiTailscaleUrl);
 
-    if (remoteAiEnabled && !normalizedUrl) {
+    if (remoteAiEnabled && !normalizedUrl && !normalizedTailscaleUrl) {
       Alert.alert(
         "Нужен адрес",
-        "Укажите адрес локального моста (например http://localhost:3001/chat или http://192.168.1.10:3001/chat)."
+        "Укажите локальный адрес Wi-Fi (например http://192.168.3.145:3001/chat) и/или Tailscale URL (например https://имя.ts.net/chat)."
       );
       return;
     }
@@ -129,15 +145,18 @@ export function SettingsAppScreen({ navigation }: Props) {
     try {
       setSavingAi(true);
       const urlToSave = normalizedUrl || remoteAiUrl.trim();
+      const tailscaleToSave = normalizedTailscaleUrl || remoteAiTailscaleUrl.trim();
       setRemoteAiUrl(urlToSave);
+      setRemoteAiTailscaleUrl(tailscaleToSave);
       await setRemoteAiConfig({
         remoteAiEnabled,
         remoteAiUrl: urlToSave,
+        remoteAiTailscaleUrl: tailscaleToSave,
         remoteAiKey,
         remoteAiModel
       });
-      if (remoteAiEnabled && urlToSave) {
-        await runHealthCheck(urlToSave);
+      if (remoteAiEnabled && (urlToSave || tailscaleToSave)) {
+        await runHealthCheck(urlToSave, tailscaleToSave);
       }
       Alert.alert("Сохранено", "Параметры подключения к локальной LLM обновлены.");
     } catch (error) {
@@ -263,12 +282,20 @@ export function SettingsAppScreen({ navigation }: Props) {
                   </View>
 
                   <NeuroField
-                    label="Адрес локального моста (AI URL)"
+                    label="Адрес локального моста (Wi-Fi / LAN)"
                     value={remoteAiUrl}
                     onChangeText={setRemoteAiUrl}
                     autoCapitalize="none"
                     autoCorrect={false}
-                    placeholder="http://localhost:3001/chat"
+                    placeholder="http://192.168.x.x:3001/chat"
+                  />
+                  <NeuroField
+                    label="Адрес Tailscale (для мобильной сети LTE)"
+                    value={remoteAiTailscaleUrl}
+                    onChangeText={setRemoteAiTailscaleUrl}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    placeholder="https://имя-пк.ts.net/chat или http://100.x.y.z:3001/chat"
                   />
                   <NeuroField
                     label="Токен (опционально)"
@@ -336,11 +363,13 @@ export function SettingsAppScreen({ navigation }: Props) {
                       </Text>
                       {healthStatus.tailscaleChatUrl ? (
                         <Pressable
-                          onPress={() => setRemoteAiUrl(healthStatus.tailscaleChatUrl || "")}
+                          onPress={() =>
+                            setRemoteAiTailscaleUrl(healthStatus.tailscaleChatUrl || "")
+                          }
                           style={styles.quickUrlButton}
                         >
                           <Text style={styles.quickUrlTitle}>
-                            {`Tailscale HTTPS (${healthStatus.tailscaleMode || "Tailnet"}) — нажать чтобы выбрать:`}
+                            {`Tailscale HTTPS (${healthStatus.tailscaleMode || "Tailnet"}) — нажать чтобы подставить в поле Tailscale:`}
                           </Text>
                           <Text selectable style={styles.healthText}>
                             {healthStatus.tailscaleChatUrl}
@@ -349,11 +378,13 @@ export function SettingsAppScreen({ navigation }: Props) {
                       ) : null}
                       {healthStatus.tailscaleIpChatUrl ? (
                         <Pressable
-                          onPress={() => setRemoteAiUrl(healthStatus.tailscaleIpChatUrl || "")}
+                          onPress={() =>
+                            setRemoteAiTailscaleUrl(healthStatus.tailscaleIpChatUrl || "")
+                          }
                           style={styles.quickUrlButton}
                         >
                           <Text style={styles.quickUrlTitle}>
-                            Tailscale IP (через VPN Tailscale) — нажать чтобы выбрать:
+                            Tailscale IP (через VPN Tailscale) — нажать чтобы подставить в поле Tailscale:
                           </Text>
                           <Text selectable style={styles.healthText}>
                             {healthStatus.tailscaleIpChatUrl}

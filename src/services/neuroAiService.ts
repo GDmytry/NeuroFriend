@@ -1,4 +1,9 @@
-import { appConfig, getCandidateChatUrls, normalizeChatApiUrl } from "../config/app";
+import {
+  appConfig,
+  getCandidateChatUrls,
+  isPrivateLanUrl,
+  normalizeChatApiUrl
+} from "../config/app";
 import { storage } from "./storage";
 import { AiApiMessage, AiApiPayload, ChatAttachment, ChatMessage, NeuralMode } from "../types";
 
@@ -7,6 +12,7 @@ type GenerateReplyParams = {
   history: ChatMessage[];
   latestUserMessage: string;
   assistantName: string;
+  userName?: string;
 };
 
 type RemoteAiResponse = {
@@ -36,9 +42,15 @@ function toApiRole(author: ChatMessage["author"]): AiApiMessage["role"] {
   return "system";
 }
 
-export function buildSystemPrompt(mode: NeuralMode, assistantName: string) {
+export function buildSystemPrompt(mode: NeuralMode, assistantName: string, userName?: string) {
+  const safeAssistantName = assistantName.trim() || "NeuroFriend";
+  const safeUserName = userName?.trim();
+
   return [
-    `Твое имя: ${assistantName}. Представляйся именно так, если пользователь спросит, как тебя зовут.`,
+    `Тебя зовут ${safeAssistantName}. Это ТВОЁ собственное имя как AI-ассистента — НИКОГДА не называй пользователя именем ${safeAssistantName}.`,
+    safeUserName
+      ? `Пользователя (твоего собеседника) зовут ${safeUserName}. Всегда помни это и при обращении называй пользователя именно ${safeUserName}.`
+      : "Не называй пользователя своим собственным именем.",
     "Ты AI-ассистент внутри мобильного приложения NeuroFriend.",
     "Отвечай на русском языке, если пользователь пишет по-русски.",
     "Сохраняй естественный диалоговый тон и не теряй контекст переписки.",
@@ -50,9 +62,10 @@ export function buildSystemPrompt(mode: NeuralMode, assistantName: string) {
 export function buildAiPayload({
   mode,
   history,
-  assistantName
-}: Pick<GenerateReplyParams, "mode" | "history" | "assistantName">): AiApiPayload {
-  const systemPrompt = buildSystemPrompt(mode, assistantName);
+  assistantName,
+  userName
+}: Pick<GenerateReplyParams, "mode" | "history" | "assistantName" | "userName">): AiApiPayload {
+  const systemPrompt = buildSystemPrompt(mode, assistantName, userName);
 
   return {
     mode,
@@ -102,6 +115,7 @@ function buildUserMessageWithAttachments(text: string, attachments: ChatAttachme
 async function getRuntimeAiConfig() {
   const settings = await storage.getSettings();
   const aiApiUrl = normalizeChatApiUrl(settings.remoteAiUrl || appConfig.aiApiUrl);
+  const aiTailscaleUrl = normalizeChatApiUrl(settings.remoteAiTailscaleUrl || "");
   const aiApiKey = normalizeString(settings.remoteAiKey || appConfig.aiApiKey);
   const aiModel = normalizeString(settings.remoteAiModel);
   const remoteAiEnabled =
@@ -111,11 +125,26 @@ async function getRuntimeAiConfig() {
 
   return {
     aiApiUrl,
+    aiTailscaleUrl,
     aiApiKey,
     aiModel,
     useMockAi: !remoteAiEnabled,
-    hasRemoteAi: remoteAiEnabled && aiApiUrl.length > 0
+    hasRemoteAi: remoteAiEnabled && (aiApiUrl.length > 0 || aiTailscaleUrl.length > 0)
   };
+}
+
+async function fetchWithOptionalTimeout(url: string, init: RequestInit, timeoutMs?: number) {
+  if (!timeoutMs || typeof AbortController === "undefined") {
+    return fetch(url, init);
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function getRemoteAssistantReply(payload: AiApiPayload) {
@@ -129,11 +158,23 @@ async function getRemoteAssistantReply(payload: AiApiPayload) {
     ? { ...payload, model: runtimeConfig.aiModel }
     : payload;
 
-  const candidateUrls = getCandidateChatUrls(runtimeConfig.aiApiUrl);
+  const candidateUrls = getCandidateChatUrls(
+    runtimeConfig.aiApiUrl,
+    runtimeConfig.aiTailscaleUrl
+  );
+  const hasRemoteFallback = candidateUrls.some((url) => !isPrivateLanUrl(url));
   let lastError: unknown = null;
 
   for (const chatUrl of candidateUrls) {
     try {
+      // On LTE, private 192.168.x.x would hang ~60s before failing; if Tailscale URL exists, fail fast via /health preflight
+      if (hasRemoteFallback && isPrivateLanUrl(chatUrl)) {
+        const healthUrl = chatUrl.endsWith("/chat")
+          ? `${chatUrl.slice(0, -"/chat".length)}/health`
+          : `${chatUrl}/health`;
+        await fetchWithOptionalTimeout(healthUrl, { method: "GET" }, 2_500);
+      }
+
       const response = await fetch(chatUrl, {
         method: "POST",
         headers: {
@@ -235,16 +276,17 @@ export async function generateAssistantReply({
   mode,
   history,
   latestUserMessage,
-  assistantName
+  assistantName,
+  userName
 }: GenerateReplyParams): Promise<string> {
   const runtimeConfig = await getRuntimeAiConfig();
 
   if (runtimeConfig.useMockAi || !runtimeConfig.hasRemoteAi) {
-    return buildMockReply({ mode, history, latestUserMessage, assistantName });
+    return buildMockReply({ mode, history, latestUserMessage, assistantName, userName });
   }
 
   const remoteReply = await getRemoteAssistantReply(
-    buildAiPayload({ mode, history, assistantName })
+    buildAiPayload({ mode, history, assistantName, userName })
   );
 
   if (!remoteReply) {
