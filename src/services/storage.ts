@@ -20,11 +20,18 @@ const KEYS = {
 } as const;
 
 const DEFAULT_MODE: NeuralMode = "friend";
+const LEGACY_STALE_URLS = [
+  "5832fea1b0b47d.lhr.life",
+  "nelinux.taildbcf93.ts.net",
+  "192.168.3.145"
+];
+
 const DEFAULT_SETTINGS: AppSettings = {
   themePreference: "system",
   remoteAiEnabled: appConfig.hasRemoteAi && !appConfig.useMockAi,
   remoteAiUrl: appConfig.aiApiUrl,
-  remoteAiKey: appConfig.aiApiKey
+  remoteAiKey: appConfig.aiApiKey,
+  remoteAiModel: ""
 };
 
 async function readJson<T>(key: string, fallback: T): Promise<T> {
@@ -92,15 +99,13 @@ function normalizeSettings(settings: AppSettings | null | undefined): AppSetting
 
   let nextUrl = normalizeChatApiUrl(merged.remoteAiUrl);
 
-  if (!nextUrl) {
+  if (!nextUrl || LEGACY_STALE_URLS.some((stale) => nextUrl.includes(stale))) {
     nextUrl = DEFAULT_SETTINGS.remoteAiUrl;
   }
 
   if (
     ACTIVE_TUNNEL_CHAT_URL &&
-    (nextUrl.includes(".lhr.life") ||
-      nextUrl.includes(".trycloudflare.com") ||
-      nextUrl.includes("nelinux.taildbcf93.ts.net"))
+    (nextUrl.includes(".lhr.life") || nextUrl.includes(".trycloudflare.com"))
   ) {
     nextUrl = normalizeChatApiUrl(ACTIVE_TUNNEL_CHAT_URL);
   }
@@ -125,7 +130,8 @@ function normalizeSettings(settings: AppSettings | null | undefined): AppSetting
         ? merged.remoteAiEnabled
         : DEFAULT_SETTINGS.remoteAiEnabled,
     remoteAiUrl: nextUrl,
-    remoteAiKey: (merged.remoteAiKey ?? DEFAULT_SETTINGS.remoteAiKey).trim()
+    remoteAiKey: (merged.remoteAiKey ?? DEFAULT_SETTINGS.remoteAiKey).trim(),
+    remoteAiModel: (merged.remoteAiModel ?? "").trim()
   };
 }
 

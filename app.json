@@ -11,7 +11,14 @@
       "backgroundColor": "#F7F3EC"
     },
     "ios": {
-      "bundleIdentifier": "com.codex.neurochat"
+      "bundleIdentifier": "com.codex.neurochat",
+      "infoPlist": {
+        "NSLocalNetworkUsageDescription": "Приложению нужен доступ к локальной сети для подключения к вашему LLM-серверу на компьютере.",
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": false,
+          "NSAllowsLocalNetworking": true
+        }
+      }
     },
     "android": {
       "package": "com.codex.neurochat",
@@ -19,8 +26,8 @@
     },
     "extra": {
       "useMockAi": false,
-      "aiApiUrl": "https://5832fea1b0b47d.lhr.life/chat",
-      "aiApiKey": "b187155b9584417abcdc34919d66cfd5",
+      "aiApiUrl": "",
+      "aiApiKey": "",
       "eas": {
         "projectId": "0943255e-8d0e-4499-8acb-fa0e4128938f"
       }

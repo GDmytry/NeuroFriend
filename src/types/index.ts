@@ -77,6 +77,7 @@ export type AiApiPayload = {
   mode: NeuralMode;
   systemPrompt: string;
   messages: AiApiMessage[];
+  model?: string;
 };
 
 export type AppSettings = {
@@ -84,4 +85,5 @@ export type AppSettings = {
   remoteAiEnabled: boolean;
   remoteAiUrl: string;
   remoteAiKey: string;
+  remoteAiModel?: string;
 };

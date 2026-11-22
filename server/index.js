@@ -1,8 +1,14 @@
 const { createServer } = require("node:http");
 const { spawn } = require("node:child_process");
-const { existsSync, readFileSync, writeFileSync } = require("node:fs");
+const { writeFileSync } = require("node:fs");
 const { networkInterfaces } = require("node:os");
 const { join } = require("node:path");
+const {
+  getServerConfig,
+  loadEnvFile,
+  resolveLlmRuntime,
+  sendChatCompletion
+} = require("./llmClient");
 const {
   createSession,
   deleteThread,
@@ -17,17 +23,14 @@ const {
 
 loadEnvFile(join(__dirname, ".env"));
 
-const config = {
-  host: process.env.CHAT_SERVER_HOST || "0.0.0.0",
-  port: Number(process.env.CHAT_SERVER_PORT || 3001),
-  apiKey: (process.env.CHAT_SERVER_API_KEY || "").trim(),
-  ollamaBaseUrl: stripTrailingSlash(process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434"),
-  ollamaModel: (process.env.OLLAMA_MODEL || "qwen3.5:4b").trim(),
-  ollamaKeepAlive: (process.env.OLLAMA_KEEP_ALIVE || "10m").trim(),
-  ollamaThink: normalizeThink(process.env.OLLAMA_THINK),
-  ollamaNumPredict: Number(process.env.OLLAMA_NUM_PREDICT || 220),
-  ollamaTemperature: Number(process.env.OLLAMA_TEMPERATURE || 0.2)
-};
+const cliArgs = new Set(process.argv.slice(2));
+const config = getServerConfig();
+if (cliArgs.has("--tunnel")) {
+  config.enablePublicTunnel = true;
+}
+if (cliArgs.has("--no-tunnel")) {
+  config.enablePublicTunnel = false;
+}
 
 const server = createServer(async (request, response) => {
   try {
@@ -43,9 +46,10 @@ const server = createServer(async (request, response) => {
 
     if (url.pathname === "/") {
       sendJson(response, 200, {
-        name: "neuro-chat-ollama-bridge",
+        name: "neurofriend-local-llm-bridge",
         ok: true,
         health: "/health",
+        models: "/models",
         chat: "/chat"
       });
       return;
@@ -53,6 +57,16 @@ const server = createServer(async (request, response) => {
 
     if (url.pathname === "/health" && request.method === "GET") {
       await handleHealth(response);
+      return;
+    }
+
+    if (url.pathname === "/models" && request.method === "GET") {
+      if (!isAuthorized(request)) {
+        sendUnauthorized(response);
+        return;
+      }
+
+      await handleModels(response);
       return;
     }
 
@@ -150,10 +164,7 @@ const server = createServer(async (request, response) => {
 
       if (!isAuthorized(request)) {
         console.warn(`[neuro-chat-server] Unauthorized /chat request from ${clientAddress}`);
-        sendJson(response, 401, {
-          ok: false,
-          error: "Unauthorized"
-        });
+        sendUnauthorized(response);
         return;
       }
 
@@ -183,22 +194,59 @@ const server = createServer(async (request, response) => {
 });
 
 let publicTunnelBaseUrl = "";
+let tunnelProcess = null;
 
 server.listen(config.port, config.host, () => {
   const lanAddresses = getLanAddresses();
-  console.log(
-    `[neuro-chat-server] Listening on http://${config.host}:${config.port} -> ${config.ollamaBaseUrl}`
-  );
-  console.log(`[neuro-chat-server] PC URL:    http://localhost:${config.port}/chat`);
+  const llmTargetLabel = config.llmBaseUrl
+    ? `${config.llmBaseUrl} (${config.llmProvider})`
+    : "auto-detect (Ollama / LM Studio / llama.cpp / vLLM / MLX)";
+
+  console.log("");
+  console.log("=========================================================");
+  console.log("  NeuroFriend Local LLM Bridge");
+  console.log("=========================================================");
+  console.log(`  Bridge:    http://${config.host}:${config.port}`);
+  console.log(`  PC URL:    http://localhost:${config.port}/chat`);
   for (const ip of lanAddresses) {
-    console.log(`[neuro-chat-server] Phone URL: http://${ip}:${config.port}/chat`);
+    console.log(`  Phone URL: http://${ip}:${config.port}/chat`);
   }
-  console.log(`[neuro-chat-server] Model: ${config.ollamaModel}`);
-  console.log(
-    `[neuro-chat-server] Auth: ${config.apiKey ? "Bearer token enabled" : "disabled"}`
-  );
-  startPublicSshTunnel();
+  console.log(`  Health:    http://localhost:${config.port}/health`);
+  console.log(`  LLM:       ${llmTargetLabel}`);
+  console.log(`  Model:     ${config.llmModel || "auto"}`);
+  console.log(`  Auth:      ${config.apiKey ? "Bearer token enabled" : "disabled (local mode)"}`);
+  console.log("=========================================================");
+
+  void logInitialLlmProbe();
+
+  if (config.enablePublicTunnel) {
+    startPublicSshTunnel();
+  }
 });
+
+async function logInitialLlmProbe() {
+  try {
+    const runtime = await resolveLlmRuntime(config);
+    console.log(
+      `[neuro-chat-server] LLM connected: ${runtime.label} (${runtime.baseUrl})`
+    );
+    if (runtime.activeModel) {
+      console.log(`[neuro-chat-server] Active model: ${runtime.activeModel}`);
+    } else {
+      console.warn(
+        `[neuro-chat-server] LLM reachable at ${runtime.baseUrl}, but no models are currently loaded/installed.`
+      );
+    }
+    if (runtime.models.length > 1) {
+      console.log(`[neuro-chat-server] Available models: ${runtime.models.join(", ")}`);
+    }
+  } catch (error) {
+    console.warn(`[neuro-chat-server] Local LLM not detected yet: ${getErrorMessage(error)}`);
+    console.warn(
+      "[neuro-chat-server] Start Ollama / LM Studio / llama-server, or run: npm run llm:setup"
+    );
+  }
+}
 
 async function handleRegister(body, response) {
   let user;
@@ -302,45 +350,69 @@ async function handleDeleteThread(request, threadId, response) {
   });
 }
 
+async function handleModels(response) {
+  try {
+    const runtime = await resolveLlmRuntime(config);
+    sendJson(response, 200, {
+      ok: true,
+      provider: runtime.provider,
+      providerLabel: runtime.label,
+      baseUrl: runtime.baseUrl,
+      activeModel: runtime.activeModel,
+      models: runtime.models
+    });
+  } catch (error) {
+    sendJson(response, 503, {
+      ok: false,
+      models: [],
+      error: getErrorMessage(error)
+    });
+  }
+}
+
 async function handleHealth(response) {
   const lanAddresses = getLanAddresses();
   const lanChatUrls = lanAddresses.map((ip) => `http://${ip}:${config.port}/chat`);
   const publicChatUrl = publicTunnelBaseUrl ? `${publicTunnelBaseUrl}/chat` : null;
 
   try {
-    const tagsResponse = await fetch(`${config.ollamaBaseUrl}/api/tags`);
-
-    if (!tagsResponse.ok) {
-      throw new Error(`Ollama tags request failed with status ${tagsResponse.status}`);
-    }
-
-    const tagsPayload = await tagsResponse.json();
-    const modelNames = Array.isArray(tagsPayload.models)
-      ? tagsPayload.models.map((item) => item.name)
-      : [];
-    const activeModel = resolveActiveModel(modelNames);
+    const runtime = await resolveLlmRuntime(config);
+    const activeModel = runtime.activeModel || config.llmModel || null;
     const modelAvailable = Boolean(activeModel);
 
     sendJson(response, 200, {
       ok: modelAvailable,
+      provider: runtime.provider,
+      providerLabel: runtime.label,
+      llmReachable: true,
       ollamaReachable: true,
-      ollamaBaseUrl: config.ollamaBaseUrl,
-      ollamaModel: activeModel || config.ollamaModel,
-      configuredModel: config.ollamaModel,
+      llmBaseUrl: runtime.baseUrl,
+      ollamaBaseUrl: runtime.baseUrl,
+      activeModel,
+      ollamaModel: activeModel,
+      configuredModel: config.llmModel || "auto",
       modelAvailable,
-      installedModels: modelNames,
+      installedModels: runtime.models,
       lanChatUrls,
       publicChatUrl,
       error: modelAvailable
         ? null
-        : `Model "${config.ollamaModel}" is not installed or not visible to Ollama`
+        : `LLM доступна (${runtime.label} на ${runtime.baseUrl}), но не найдено загруженных моделей.`
     });
   } catch (error) {
     sendJson(response, 503, {
       ok: false,
+      provider: config.llmProvider,
+      providerLabel: config.llmProvider === "auto" ? "Автопоиск" : config.llmProvider,
+      llmReachable: false,
       ollamaReachable: false,
-      ollamaBaseUrl: config.ollamaBaseUrl,
-      ollamaModel: config.ollamaModel,
+      llmBaseUrl: config.llmBaseUrl || "auto",
+      ollamaBaseUrl: config.llmBaseUrl || "auto",
+      activeModel: config.llmModel || null,
+      ollamaModel: config.llmModel || null,
+      configuredModel: config.llmModel || "auto",
+      modelAvailable: false,
+      installedModels: [],
       lanChatUrls,
       publicChatUrl,
       error: getErrorMessage(error)
@@ -351,124 +423,38 @@ async function handleHealth(response) {
 async function handleChat(body, response, meta) {
   validateChatPayload(body);
 
-  let targetModel = config.ollamaModel;
-  let ollamaResponse = await sendOllamaChatRequest(targetModel, body.messages);
-
-  if (ollamaResponse.status === 404) {
-    try {
-      const tagsResponse = await fetch(`${config.ollamaBaseUrl}/api/tags`);
-      if (tagsResponse.ok) {
-        const tagsPayload = await tagsResponse.json();
-        const modelNames = Array.isArray(tagsPayload.models)
-          ? tagsPayload.models.map((item) => item.name)
-          : [];
-        const fallbackModel = resolveActiveModel(modelNames);
-        if (fallbackModel && fallbackModel !== targetModel) {
-          console.log(
-            `[neuro-chat-server] Model "${targetModel}" not found, falling back to "${fallbackModel}"`
-          );
-          targetModel = fallbackModel;
-          ollamaResponse = await sendOllamaChatRequest(targetModel, body.messages);
-        }
-      }
-    } catch {
-      // Keep original 404 response if tags lookup fails
-    }
-  }
-
-  if (!ollamaResponse.ok) {
-    const errorText = await safeReadText(ollamaResponse);
-    throw new Error(
-      `Ollama chat request failed with status ${ollamaResponse.status}${
-        errorText ? `: ${errorText}` : ""
-      }`
-    );
-  }
-
-  const data = await ollamaResponse.json();
-  const rawContent = data?.message?.content || "";
-  const reply = stripThinkingTags(rawContent).trim();
-
-  if (!reply) {
-    throw new Error("Ollama returned an empty chat response");
-  }
+  const requestedModel = typeof body.model === "string" ? body.model.trim() : "";
+  const result = await sendChatCompletion(config, body.messages, requestedModel);
 
   sendJson(response, 200, {
     ok: true,
-    reply,
-    model: data.model || targetModel,
-    totalDuration: data.total_duration || null,
-    evalCount: data.eval_count || null
+    reply: result.reply,
+    model: result.model,
+    provider: result.provider,
+    totalDuration: result.totalDuration,
+    evalCount: result.evalCount
   });
 
   const elapsedMs = Date.now() - meta.requestStartedAt;
   console.log(
-    `[neuro-chat-server] Completed /chat for ${meta.clientAddress} (${targetModel}) in ${elapsedMs}ms`
+    `[neuro-chat-server] Completed /chat for ${meta.clientAddress} (${result.provider}: ${result.model}) in ${elapsedMs}ms`
   );
-}
-
-function sendOllamaChatRequest(model, messages) {
-  return fetch(`${config.ollamaBaseUrl}/api/chat`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      model,
-      messages,
-      stream: false,
-      keep_alive: config.ollamaKeepAlive,
-      think: config.ollamaThink,
-      options: {
-        num_predict: config.ollamaNumPredict,
-        temperature: config.ollamaTemperature
-      }
-    })
-  });
-}
-
-function resolveActiveModel(modelNames) {
-  if (!Array.isArray(modelNames) || modelNames.length === 0) {
-    return null;
-  }
-
-  if (modelNames.includes(config.ollamaModel)) {
-    return config.ollamaModel;
-  }
-
-  const normalizedTarget = config.ollamaModel.toLowerCase().replace(/\s+/g, "");
-  const exactCi = modelNames.find(
-    (name) => String(name).toLowerCase().replace(/\s+/g, "") === normalizedTarget
-  );
-  if (exactCi) {
-    return exactCi;
-  }
-
-  const qwen35 = modelNames.find((name) => String(name).toLowerCase().startsWith("qwen3.5"));
-  if (qwen35) {
-    return qwen35;
-  }
-
-  const anyQwen = modelNames.find((name) => String(name).toLowerCase().startsWith("qwen"));
-  if (anyQwen) {
-    return anyQwen;
-  }
-
-  return modelNames[0];
-}
-
-function stripThinkingTags(text) {
-  return String(text || "").replace(/<think>[\s\S]*?<\/think>/gi, "");
 }
 
 function getLanAddresses() {
   const interfaces = networkInterfaces();
-  const addresses = [];
+  const candidates = [];
 
-  for (const entries of Object.values(interfaces)) {
+  for (const [ifaceName, entries] of Object.entries(interfaces)) {
     if (!Array.isArray(entries)) {
       continue;
     }
+
+    const lowerName = ifaceName.toLowerCase();
+    const isVirtual =
+      /vethernet|wsl|hyper-v|virtualbox|vmware|docker|vbox|loopback|tailscale|wireguard|zerotier|radmin|hamachi|utun|awdl|llw|bridge/i.test(
+        lowerName
+      );
 
     for (const entry of entries) {
       if (
@@ -477,24 +463,40 @@ function getLanAddresses() {
         !entry.internal &&
         !entry.address.startsWith("169.254.")
       ) {
-        addresses.push(entry.address);
+        let priority = isVirtual ? 10 : 1;
+        if (!isVirtual && entry.address.startsWith("192.168.")) {
+          priority = 0;
+        } else if (!isVirtual && entry.address.startsWith("10.")) {
+          priority = 1;
+        } else if (!isVirtual) {
+          priority = 2;
+        }
+
+        candidates.push({ address: entry.address, priority });
       }
     }
   }
 
-  return addresses;
+  candidates.sort((a, b) => a.priority - b.priority);
+  return [...new Set(candidates.map((item) => item.address))];
 }
 
 function startPublicSshTunnel() {
   try {
+    const isWindows = process.platform === "win32";
+    const sshBin = isWindows ? "ssh.exe" : "ssh";
+    const nullDevice = isWindows ? "NUL" : "/dev/null";
+
+    console.log("[neuro-chat-server] Starting public HTTPS tunnel (localhost.run)...");
+
     const child = spawn(
-      "ssh.exe",
+      sshBin,
       [
         "-T",
         "-o",
         "StrictHostKeyChecking=no",
         "-o",
-        "UserKnownHostsFile=NUL",
+        `UserKnownHostsFile=${nullDevice}`,
         "-o",
         "ServerAliveInterval=30",
         "-R",
@@ -506,6 +508,8 @@ function startPublicSshTunnel() {
         windowsHide: true
       }
     );
+
+    tunnelProcess = child;
 
     const handleOutput = (chunk) => {
       const text = String(chunk || "");
@@ -520,56 +524,57 @@ function startPublicSshTunnel() {
 
     child.stdout.on("data", handleOutput);
     child.stderr.on("data", handleOutput);
-    child.on("error", () => {});
-
-    process.on("exit", () => {
-      try {
-        child.kill();
-      } catch {}
+    child.on("error", (err) => {
+      console.warn(`[neuro-chat-server] Public tunnel failed to start: ${getErrorMessage(err)}`);
     });
-  } catch {
-    // Ignore tunnel startup errors
+  } catch (error) {
+    console.warn(`[neuro-chat-server] Public tunnel unavailable: ${getErrorMessage(error)}`);
   }
 }
 
 function persistTunnelChatUrl(chatUrl) {
   try {
     const tunnelJsonPath = join(__dirname, "..", "src", "config", "tunnelUrl.json");
-    writeFileSync(tunnelJsonPath, JSON.stringify({ chatUrl }, null, 2), "utf8");
-  } catch {}
-
-  try {
-    const appJsonPath = join(__dirname, "..", "app.json");
-    if (existsSync(appJsonPath)) {
-      const appJson = JSON.parse(readFileSync(appJsonPath, "utf8"));
-      if (appJson && appJson.expo && appJson.expo.extra) {
-        appJson.expo.extra.aiApiUrl = chatUrl;
-        writeFileSync(appJsonPath, `${JSON.stringify(appJson, null, 2)}\n`, "utf8");
-      }
-    }
+    writeFileSync(tunnelJsonPath, `${JSON.stringify({ chatUrl }, null, 2)}\n`, "utf8");
   } catch {}
 }
 
+function shutdown() {
+  if (tunnelProcess) {
+    try {
+      tunnelProcess.kill();
+    } catch {}
+    tunnelProcess = null;
+  }
+  server.close(() => {
+    process.exit(0);
+  });
+  setTimeout(() => process.exit(0), 1_500).unref();
+}
+
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);
+
 function validateChatPayload(body) {
   if (!body || typeof body !== "object") {
-    throw new Error("Request body must be a JSON object");
+    throw createHttpError(400, "Request body must be a JSON object");
   }
 
   if (!Array.isArray(body.messages) || body.messages.length === 0) {
-    throw new Error("Request body must include a non-empty messages array");
+    throw createHttpError(400, "Request body must include a non-empty messages array");
   }
 
   for (const message of body.messages) {
     if (!message || typeof message !== "object") {
-      throw new Error("Each message must be an object");
+      throw createHttpError(400, "Each message must be an object");
     }
 
     if (!["system", "user", "assistant"].includes(message.role)) {
-      throw new Error("Each message role must be system, user, or assistant");
+      throw createHttpError(400, "Each message role must be system, user, or assistant");
     }
 
     if (typeof message.content !== "string" || !message.content.trim()) {
-      throw new Error("Each message content must be a non-empty string");
+      throw createHttpError(400, "Each message content must be a non-empty string");
     }
   }
 }
@@ -639,8 +644,8 @@ function readJsonBody(request) {
     request.on("data", (chunk) => {
       totalLength += chunk.length;
 
-      if (totalLength > 1024 * 1024) {
-        reject(new Error("Request body is too large"));
+      if (totalLength > 2 * 1024 * 1024) {
+        reject(createHttpError(413, "Request body is too large"));
         request.destroy();
         return;
       }
@@ -653,34 +658,12 @@ function readJsonBody(request) {
         const raw = Buffer.concat(chunks).toString("utf8");
         resolve(raw ? JSON.parse(raw) : {});
       } catch {
-        reject(new Error("Request body must be valid JSON"));
+        reject(createHttpError(400, "Request body must be valid JSON"));
       }
     });
 
     request.on("error", reject);
   });
-}
-
-async function safeReadText(response) {
-  try {
-    return await response.text();
-  } catch {
-    return "";
-  }
-}
-
-function stripTrailingSlash(value) {
-  return value.endsWith("/") ? value.slice(0, -1) : value;
-}
-
-function normalizeThink(value) {
-  const normalized = String(value || "false").trim().toLowerCase();
-
-  if (["low", "medium", "high"].includes(normalized)) {
-    return normalized;
-  }
-
-  return normalized === "true";
 }
 
 function getErrorMessage(error) {
@@ -712,34 +695,4 @@ function getErrorMessage(error) {
   }
 
   return details.filter(Boolean).join(": ") || "Unexpected server error";
-}
-
-function loadEnvFile(pathname) {
-  if (!existsSync(pathname)) {
-    return;
-  }
-
-  const raw = readFileSync(pathname, "utf8");
-  const lines = raw.split(/\r?\n/);
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-
-    if (!trimmed || trimmed.startsWith("#")) {
-      continue;
-    }
-
-    const separatorIndex = trimmed.indexOf("=");
-
-    if (separatorIndex === -1) {
-      continue;
-    }
-
-    const key = trimmed.slice(0, separatorIndex).trim();
-    const value = trimmed.slice(separatorIndex + 1).trim();
-
-    if (!process.env[key]) {
-      process.env[key] = value;
-    }
-  }
 }

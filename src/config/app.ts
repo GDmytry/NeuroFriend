@@ -9,7 +9,7 @@ type AppExtra = {
   aiApiKey?: string;
 };
 
-const DEFAULT_BRIDGE_PORT = 3001;
+export const DEFAULT_BRIDGE_PORT = 3001;
 
 function normalizeString(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
@@ -17,10 +17,28 @@ function normalizeString(value: unknown) {
 
 export const ACTIVE_TUNNEL_CHAT_URL = normalizeString(tunnelConfig?.chatUrl);
 
+function getExpoLanHost(): string {
+  const hostUri = normalizeString(Constants.expoConfig?.hostUri);
+  if (!hostUri) {
+    return "";
+  }
+
+  const host = hostUri.split(":")[0]?.trim() || "";
+  if (
+    host &&
+    !host.endsWith(".exp.direct") &&
+    !host.endsWith(".expo.dev") &&
+    (host === "localhost" || /^(192\.168\.|10\.|172\.(1[6-9]|2\d|3[0-1])\.|127\.)/.test(host))
+  ) {
+    return host;
+  }
+
+  return "";
+}
+
 export const FALLBACK_CHAT_URLS = [
   ...(ACTIVE_TUNNEL_CHAT_URL ? [ACTIVE_TUNNEL_CHAT_URL] : []),
-  `http://192.168.3.145:${DEFAULT_BRIDGE_PORT}/chat`,
-  "https://nelinux.taildbcf93.ts.net/chat",
+  ...(Platform.OS === "android" ? [`http://10.0.2.2:${DEFAULT_BRIDGE_PORT}/chat`] : []),
   `http://localhost:${DEFAULT_BRIDGE_PORT}/chat`,
   `http://127.0.0.1:${DEFAULT_BRIDGE_PORT}/chat`
 ];
@@ -62,6 +80,27 @@ export function deriveServerBaseUrl(value: unknown): string {
   return chatUrl.endsWith("/chat") ? chatUrl.slice(0, -"/chat".length) : chatUrl;
 }
 
+export function getAutoDetectedChatUrl(): string {
+  if (Platform.OS === "web" && typeof window !== "undefined" && window.location?.hostname) {
+    return `http://${window.location.hostname}:${DEFAULT_BRIDGE_PORT}/chat`;
+  }
+
+  const expoHost = getExpoLanHost();
+  if (expoHost) {
+    return `http://${expoHost}:${DEFAULT_BRIDGE_PORT}/chat`;
+  }
+
+  if (ACTIVE_TUNNEL_CHAT_URL) {
+    return normalizeChatApiUrl(ACTIVE_TUNNEL_CHAT_URL);
+  }
+
+  if (Platform.OS === "android") {
+    return `http://10.0.2.2:${DEFAULT_BRIDGE_PORT}/chat`;
+  }
+
+  return `http://localhost:${DEFAULT_BRIDGE_PORT}/chat`;
+}
+
 export function getCandidateChatUrls(primaryUrl?: string): string[] {
   const result: string[] = [];
   const addUrl = (url: unknown) => {
@@ -71,28 +110,20 @@ export function getCandidateChatUrls(primaryUrl?: string): string[] {
     }
   };
 
+  // User-configured URL always takes top priority
+  addUrl(primaryUrl);
+
   if (Platform.OS === "web" && typeof window !== "undefined" && window.location?.hostname) {
-    const host = window.location.hostname;
-    addUrl(`http://${host}:${DEFAULT_BRIDGE_PORT}/chat`);
+    addUrl(`http://${window.location.hostname}:${DEFAULT_BRIDGE_PORT}/chat`);
+  }
+
+  const expoHost = getExpoLanHost();
+  if (expoHost) {
+    addUrl(`http://${expoHost}:${DEFAULT_BRIDGE_PORT}/chat`);
   }
 
   if (ACTIVE_TUNNEL_CHAT_URL && Platform.OS !== "web") {
     addUrl(ACTIVE_TUNNEL_CHAT_URL);
-  }
-
-  addUrl(primaryUrl);
-
-  const hostUri = normalizeString(Constants.expoConfig?.hostUri);
-  if (hostUri) {
-    const host = hostUri.split(":")[0]?.trim();
-    if (
-      host &&
-      !host.endsWith(".exp.direct") &&
-      !host.endsWith(".expo.dev") &&
-      (host === "localhost" || /^(192\.168\.|10\.|172\.|127\.)/.test(host))
-    ) {
-      addUrl(`http://${host}:${DEFAULT_BRIDGE_PORT}/chat`);
-    }
   }
 
   for (const fallback of FALLBACK_CHAT_URLS) {
@@ -113,12 +144,11 @@ function detectRuntimeDefaultChatUrl(configuredUrl: string): string {
     return `http://${window.location.hostname}:${DEFAULT_BRIDGE_PORT}/chat`;
   }
 
-  if (ACTIVE_TUNNEL_CHAT_URL) {
-    return normalizeChatApiUrl(ACTIVE_TUNNEL_CHAT_URL);
+  if (configuredUrl) {
+    return configuredUrl;
   }
 
-  const candidates = getCandidateChatUrls(configuredUrl);
-  return candidates[0] || `http://192.168.3.145:${DEFAULT_BRIDGE_PORT}/chat`;
+  return getAutoDetectedChatUrl();
 }
 
 const extra = (Constants.expoConfig?.extra ?? {}) as AppExtra;

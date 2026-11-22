@@ -17,6 +17,7 @@ type SettingsContextValue = {
     remoteAiEnabled: boolean;
     remoteAiUrl: string;
     remoteAiKey: string;
+    remoteAiModel?: string;
   }) => Promise<void>;
 };
 
@@ -24,7 +25,8 @@ const defaultSettings: AppSettings = {
   themePreference: "system",
   remoteAiEnabled: appConfig.hasRemoteAi && !appConfig.useMockAi,
   remoteAiUrl: appConfig.aiApiUrl,
-  remoteAiKey: appConfig.aiApiKey
+  remoteAiKey: appConfig.aiApiKey,
+  remoteAiModel: ""
 };
 
 const SettingsContext = createContext<SettingsContextValue | undefined>(undefined);
@@ -74,7 +76,11 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
           ...settings,
           remoteAiEnabled: value.remoteAiEnabled,
           remoteAiUrl: value.remoteAiUrl.trim(),
-          remoteAiKey: value.remoteAiKey.trim()
+          remoteAiKey: value.remoteAiKey.trim(),
+          remoteAiModel:
+            value.remoteAiModel !== undefined
+              ? value.remoteAiModel.trim()
+              : (settings.remoteAiModel ?? "")
         };
 
         setSettings(nextSettings);

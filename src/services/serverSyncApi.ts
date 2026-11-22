@@ -39,6 +39,11 @@ export type ServerHealthStatus = {
   ok: boolean;
   reachable: boolean;
   baseUrl: string;
+  provider?: string;
+  providerLabel?: string;
+  llmReachable?: boolean;
+  llmBaseUrl?: string;
+  activeModel?: string;
   ollamaReachable?: boolean;
   ollamaModel?: string;
   modelAvailable?: boolean;
@@ -228,19 +233,28 @@ export async function checkServerHealth(customUrl?: string): Promise<ServerHealt
     };
   }
 
+  let primaryError = "";
   let lastError = "Network request failed";
   const primaryBaseUrl = customUrl ? deriveServerBaseUrl(customUrl) : config.baseUrl;
 
   for (const baseUrl of urlsToTry) {
     try {
-      const response = await fetchWithTimeout(`${baseUrl}/health`, { method: "GET" }, 4_000);
+      const response = await fetchWithTimeout(`${baseUrl}/health`, { method: "GET" }, 8_000);
       if (!response.ok && response.status !== 503) {
         lastError = `Status ${response.status}`;
+        if (baseUrl === primaryBaseUrl && !primaryError) {
+          primaryError = lastError;
+        }
         continue;
       }
 
       const payload = (await response.json()) as {
         ok?: boolean;
+        provider?: string;
+        providerLabel?: string;
+        llmReachable?: boolean;
+        llmBaseUrl?: string;
+        activeModel?: string;
         ollamaReachable?: boolean;
         ollamaModel?: string;
         modelAvailable?: boolean;
@@ -250,12 +264,19 @@ export async function checkServerHealth(customUrl?: string): Promise<ServerHealt
         error?: string | null;
       };
 
+      const resolvedModel = payload.activeModel || payload.ollamaModel;
+
       return {
         ok: Boolean(payload.ok),
         reachable: true,
         baseUrl,
+        provider: payload.provider,
+        providerLabel: payload.providerLabel,
+        llmReachable: payload.llmReachable ?? payload.ollamaReachable,
+        llmBaseUrl: payload.llmBaseUrl,
+        activeModel: resolvedModel,
         ollamaReachable: payload.ollamaReachable,
-        ollamaModel: payload.ollamaModel,
+        ollamaModel: resolvedModel,
         modelAvailable: payload.modelAvailable,
         installedModels: payload.installedModels,
         lanChatUrls: payload.lanChatUrls,
@@ -264,6 +285,9 @@ export async function checkServerHealth(customUrl?: string): Promise<ServerHealt
       };
     } catch (error) {
       lastError = error instanceof Error ? error.message : "Network request failed";
+      if (baseUrl === primaryBaseUrl && !primaryError) {
+        primaryError = lastError;
+      }
     }
   }
 
@@ -271,7 +295,7 @@ export async function checkServerHealth(customUrl?: string): Promise<ServerHealt
     ok: false,
     reachable: false,
     baseUrl: primaryBaseUrl,
-    error: toUserFacingServerError(lastError, primaryBaseUrl)
+    error: toUserFacingServerError(primaryError || lastError, primaryBaseUrl)
   };
 }
 

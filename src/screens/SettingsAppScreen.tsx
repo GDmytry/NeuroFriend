@@ -17,7 +17,7 @@ import { NeuroButton } from "../components/neuro/NeuroButton";
 import { NeuroField } from "../components/neuro/NeuroField";
 import { OutlinedTitle } from "../components/neuro/OutlinedTitle";
 import { PaperPanel } from "../components/neuro/PaperPanel";
-import { normalizeChatApiUrl } from "../config/app";
+import { getAutoDetectedChatUrl, normalizeChatApiUrl } from "../config/app";
 import { useAuth } from "../contexts/AuthSyncContext";
 import { useChat } from "../contexts/ChatSyncRuntimeContext";
 import { useSettings } from "../contexts/SettingsContext";
@@ -53,6 +53,7 @@ export function SettingsAppScreen({ navigation }: Props) {
   const [remoteAiEnabled, setRemoteAiEnabled] = useState(settings.remoteAiEnabled);
   const [remoteAiUrl, setRemoteAiUrl] = useState(settings.remoteAiUrl);
   const [remoteAiKey, setRemoteAiKey] = useState(settings.remoteAiKey);
+  const [remoteAiModel, setRemoteAiModel] = useState(settings.remoteAiModel ?? "");
   const [savingAssistant, setSavingAssistant] = useState(false);
   const [savingAi, setSavingAi] = useState(false);
   const [checkingHealth, setCheckingHealth] = useState(false);
@@ -67,7 +68,8 @@ export function SettingsAppScreen({ navigation }: Props) {
     setRemoteAiEnabled(settings.remoteAiEnabled);
     setRemoteAiUrl(settings.remoteAiUrl);
     setRemoteAiKey(settings.remoteAiKey);
-  }, [settings.remoteAiEnabled, settings.remoteAiKey, settings.remoteAiUrl]);
+    setRemoteAiModel(settings.remoteAiModel ?? "");
+  }, [settings.remoteAiEnabled, settings.remoteAiKey, settings.remoteAiModel, settings.remoteAiUrl]);
 
   useEffect(() => {
     if (settings.remoteAiUrl) {
@@ -119,7 +121,7 @@ export function SettingsAppScreen({ navigation }: Props) {
     if (remoteAiEnabled && !normalizedUrl) {
       Alert.alert(
         "Нужен адрес",
-        "Укажите адрес сервера (например http://192.168.3.145:3001/chat или https://.../chat)."
+        "Укажите адрес локального моста (например http://localhost:3001/chat или http://192.168.1.10:3001/chat)."
       );
       return;
     }
@@ -131,12 +133,13 @@ export function SettingsAppScreen({ navigation }: Props) {
       await setRemoteAiConfig({
         remoteAiEnabled,
         remoteAiUrl: urlToSave,
-        remoteAiKey
+        remoteAiKey,
+        remoteAiModel
       });
       if (remoteAiEnabled && urlToSave) {
         await runHealthCheck(urlToSave);
       }
-      Alert.alert("Сохранено", "Параметры подключения к серверу AI обновлены.");
+      Alert.alert("Сохранено", "Параметры подключения к локальной LLM обновлены.");
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Не удалось сохранить параметры AI.";
@@ -144,6 +147,12 @@ export function SettingsAppScreen({ navigation }: Props) {
     } finally {
       setSavingAi(false);
     }
+  }
+
+  function handleAutoDetectUrl() {
+    const detected = getAutoDetectedChatUrl();
+    setRemoteAiUrl(detected);
+    void runHealthCheck(detected);
   }
 
   async function handleLogout() {
@@ -213,9 +222,9 @@ export function SettingsAppScreen({ navigation }: Props) {
                 ) : null}
 
                 <View style={styles.technicalBlock}>
-                  <Text style={styles.technicalTitle}>Подключение к серверу (AI)</Text>
+                  <Text style={styles.technicalTitle}>Подключение локальной LLM</Text>
                   <Text style={styles.technicalHint}>
-                    Укажите локальный адрес ПК в Wi-Fi сети (например http://192.168.3.145:3001/chat) или публичный HTTPS-туннель.
+                    Поддерживаются Ollama, LM Studio, llama.cpp, vLLM, MLX и любой OpenAI-совместимый сервер через локальный мост (порт 3001).
                   </Text>
 
                   <View style={styles.technicalToggleRow}>
@@ -232,7 +241,7 @@ export function SettingsAppScreen({ navigation }: Props) {
                           remoteAiEnabled && styles.toggleChipTextActive
                         ]}
                       >
-                        Сервер AI
+                        Локальная LLM
                       </Text>
                     </Pressable>
                     <Pressable
@@ -254,30 +263,76 @@ export function SettingsAppScreen({ navigation }: Props) {
                   </View>
 
                   <NeuroField
-                    label="Адрес сервера (AI URL)"
+                    label="Адрес локального моста (AI URL)"
                     value={remoteAiUrl}
                     onChangeText={setRemoteAiUrl}
                     autoCapitalize="none"
                     autoCorrect={false}
-                    placeholder="http://192.168.3.145:3001/chat"
+                    placeholder="http://localhost:3001/chat"
                   />
                   <NeuroField
-                    label="Токен (Bearer token)"
+                    label="Токен (опционально)"
                     value={remoteAiKey}
                     onChangeText={setRemoteAiKey}
                     autoCapitalize="none"
                     autoCorrect={false}
-                    placeholder="Ваш CHAT_SERVER_API_KEY"
+                    placeholder="Оставьте пустым, если CHAT_SERVER_API_KEY не задан"
                   />
+
+                  {healthStatus?.installedModels && healthStatus.installedModels.length > 0 ? (
+                    <View style={styles.modelsSection}>
+                      <Text style={styles.modelsLabel}>Модель на компьютере</Text>
+                      <View style={styles.modelsWrap}>
+                        <Pressable
+                          onPress={() => setRemoteAiModel("")}
+                          style={[
+                            styles.modelChip,
+                            !remoteAiModel && styles.modelChipActive
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.modelChipText,
+                              !remoteAiModel && styles.modelChipTextActive
+                            ]}
+                          >
+                            Авто ({healthStatus.activeModel || healthStatus.ollamaModel || "по умолчанию"})
+                          </Text>
+                        </Pressable>
+                        {healthStatus.installedModels.map((modelName) => {
+                          const selected = remoteAiModel === modelName;
+                          return (
+                            <Pressable
+                              key={modelName}
+                              onPress={() => setRemoteAiModel(modelName)}
+                              style={[
+                                styles.modelChip,
+                                selected && styles.modelChipActive
+                              ]}
+                            >
+                              <Text
+                                style={[
+                                  styles.modelChipText,
+                                  selected && styles.modelChipTextActive
+                                ]}
+                              >
+                                {modelName}
+                              </Text>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  ) : null}
 
                   {healthStatus ? (
                     <View style={styles.healthBox}>
                       <Text style={styles.healthText}>
                         {healthStatus.reachable
                           ? healthStatus.ok
-                            ? `Сервер доступен • Модель: ${healthStatus.ollamaModel}`
-                            : `Сервер доступен, но модель не готова: ${healthStatus.error ?? ""}`
-                          : `Статус: ${healthStatus.error ?? "Сервер недоступен"}`}
+                            ? `Подключено (${healthStatus.providerLabel || "LLM"}) • Модель: ${remoteAiModel || healthStatus.activeModel || healthStatus.ollamaModel || "авто"}`
+                            : `Мост доступен, но LLM не готова: ${healthStatus.error ?? ""}`
+                          : `Статус: ${healthStatus.error ?? "Мост недоступен"}`}
                       </Text>
                       {healthStatus.publicChatUrl ? (
                         <Text selectable style={styles.healthText}>
@@ -286,14 +341,14 @@ export function SettingsAppScreen({ navigation }: Props) {
                       ) : null}
                       {healthStatus.lanChatUrls?.length ? (
                         <Text selectable style={styles.healthText}>
-                          {`Wi-Fi адрес:\n${healthStatus.lanChatUrls[0]}`}
+                          {`Wi-Fi адрес для телефона:\n${healthStatus.lanChatUrls[0]}`}
                         </Text>
                       ) : null}
                     </View>
                   ) : null}
 
                   <NeuroButton
-                    title="Сохранить сервер"
+                    title="Сохранить подключение"
                     onPress={() => void handleSaveAiConfig()}
                     loading={savingAi}
                     compact
@@ -302,6 +357,11 @@ export function SettingsAppScreen({ navigation }: Props) {
                     title="Проверить подключение"
                     onPress={() => void runHealthCheck()}
                     loading={checkingHealth}
+                    compact
+                  />
+                  <NeuroButton
+                    title="Автоопределить адрес"
+                    onPress={handleAutoDetectUrl}
                     compact
                   />
                 </View>
@@ -438,6 +498,40 @@ const createStyles = (palette: ReturnType<typeof getNeuroPalette>) =>
     },
     toggleChipTextActive: {
       color: "#111111"
+    },
+    modelsSection: {
+      gap: 8
+    },
+    modelsLabel: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: palette.inkSoft,
+      marginLeft: 6
+    },
+    modelsWrap: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8
+    },
+    modelChip: {
+      borderRadius: 18,
+      borderWidth: 2,
+      borderColor: palette.outline,
+      backgroundColor: palette.panel,
+      paddingHorizontal: 12,
+      paddingVertical: 8
+    },
+    modelChipActive: {
+      backgroundColor: palette.gradientTop
+    },
+    modelChipText: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: palette.inkSoft
+    },
+    modelChipTextActive: {
+      color: "#111111",
+      fontWeight: "700"
     },
     healthBox: {
       borderRadius: 18,

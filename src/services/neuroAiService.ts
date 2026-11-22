@@ -102,6 +102,7 @@ async function getRuntimeAiConfig() {
   const settings = await storage.getSettings();
   const aiApiUrl = normalizeChatApiUrl(settings.remoteAiUrl || appConfig.aiApiUrl);
   const aiApiKey = normalizeString(settings.remoteAiKey || appConfig.aiApiKey);
+  const aiModel = normalizeString(settings.remoteAiModel);
   const remoteAiEnabled =
     typeof settings.remoteAiEnabled === "boolean"
       ? settings.remoteAiEnabled
@@ -110,6 +111,7 @@ async function getRuntimeAiConfig() {
   return {
     aiApiUrl,
     aiApiKey,
+    aiModel,
     useMockAi: !remoteAiEnabled,
     hasRemoteAi: remoteAiEnabled && aiApiUrl.length > 0
   };
@@ -121,6 +123,10 @@ async function getRemoteAssistantReply(payload: AiApiPayload) {
   if (runtimeConfig.useMockAi || !runtimeConfig.hasRemoteAi) {
     return null;
   }
+
+  const requestPayload: AiApiPayload = runtimeConfig.aiModel
+    ? { ...payload, model: runtimeConfig.aiModel }
+    : payload;
 
   const candidateUrls = getCandidateChatUrls(runtimeConfig.aiApiUrl);
   let lastError: unknown = null;
@@ -135,7 +141,7 @@ async function getRemoteAssistantReply(payload: AiApiPayload) {
             ? { Authorization: `Bearer ${runtimeConfig.aiApiKey}` }
             : {})
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(requestPayload)
       });
 
       if (response.status >= 502 && response.status <= 504 && candidateUrls.length > 1) {
@@ -175,19 +181,19 @@ async function getRemoteAssistantReply(payload: AiApiPayload) {
 
 function toUserFacingRemoteAiError(message: string) {
   if (message.includes("401")) {
-    return "Сервер AI отклонил запрос. Проверьте aiApiKey в настройках приложения и CHAT_SERVER_API_KEY на сервере.";
+    return "Сервер AI отклонил запрос (401). Проверьте Bearer token в настройках приложения и CHAT_SERVER_API_KEY в server/.env.";
   }
 
   if (message.includes("ECONNREFUSED") || message.includes("fetch failed")) {
-    return "Node-сервер доступен, но не может подключиться к Ollama на 127.0.0.1:11434. Проверьте, что Ollama запущена и локальный API отвечает.";
+    return "Мост доступен, но не может подключиться к локальной LLM. Убедитесь, что Ollama / LM Studio / llama-server запущены, или выполните npm run llm:check.";
   }
 
-  if (message.includes("timed out")) {
-    return "Сервер AI не ответил вовремя. Если вы прикрепили файл, попробуйте меньший текст или разделите его на части.";
+  if (message.includes("timed out") || message.includes("aborted") || message.includes("AbortError")) {
+    return "Локальная LLM не успела ответить вовремя. Попробуйте более лёгкую модель или увеличьте LLM_TIMEOUT_MS в server/.env.";
   }
 
   if (message.includes("Network request failed")) {
-    return "Приложение не может подключиться к серверу AI. Проверьте публичный HTTPS-адрес, токен и доступность туннеля.";
+    return "Приложение не может подключиться к локальному мосту (порт 3001). Убедитесь, что запущен npm run dev или npm run server:start и проверьте адрес в настройках.";
   }
 
   return `Ошибка подключения к AI: ${message}`;
