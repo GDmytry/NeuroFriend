@@ -10,26 +10,42 @@ const {
 
 function getLanAddresses() {
   const interfaces = networkInterfaces();
-  const addresses = [];
+  const candidates = [];
 
-  for (const entries of Object.values(interfaces)) {
+  for (const [ifaceName, entries] of Object.entries(interfaces)) {
     if (!Array.isArray(entries)) {
       continue;
     }
+
+    const isVirtual =
+      /vethernet|wsl|hyper-v|virtualbox|vmware|docker|vbox|loopback|tailscale|wireguard|zerotier|radmin|hamachi|utun|awdl|llw|bridge|tun|tap|mihomo|clash|sing-box|v2ray/i.test(
+        ifaceName.toLowerCase()
+      );
 
     for (const entry of entries) {
       if (
         entry &&
         entry.family === "IPv4" &&
         !entry.internal &&
-        !entry.address.startsWith("169.254.")
+        !entry.address.startsWith("169.254.") &&
+        !entry.address.startsWith("198.18.") &&
+        !entry.address.startsWith("198.19.")
       ) {
-        addresses.push(entry.address);
+        let priority = isVirtual ? 10 : 1;
+        if (!isVirtual && entry.address.startsWith("192.168.")) {
+          priority = 0;
+        } else if (!isVirtual && entry.address.startsWith("10.")) {
+          priority = 1;
+        } else if (!isVirtual) {
+          priority = 2;
+        }
+        candidates.push({ address: entry.address, priority });
       }
     }
   }
 
-  return addresses;
+  candidates.sort((a, b) => a.priority - b.priority);
+  return [...new Set(candidates.map((item) => item.address))];
 }
 
 async function main() {

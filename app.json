@@ -15,7 +15,7 @@
       "infoPlist": {
         "NSLocalNetworkUsageDescription": "Приложению нужен доступ к локальной сети для подключения к вашему LLM-серверу на компьютере.",
         "NSAppTransportSecurity": {
-          "NSAllowsArbitraryLoads": false,
+          "NSAllowsArbitraryLoads": true,
           "NSAllowsLocalNetworking": true
         }
       }

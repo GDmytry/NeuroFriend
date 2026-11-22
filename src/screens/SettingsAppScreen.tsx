@@ -334,15 +334,58 @@ export function SettingsAppScreen({ navigation }: Props) {
                             : `Мост доступен, но LLM не готова: ${healthStatus.error ?? ""}`
                           : `Статус: ${healthStatus.error ?? "Мост недоступен"}`}
                       </Text>
-                      {healthStatus.publicChatUrl ? (
-                        <Text selectable style={styles.healthText}>
-                          {`Публичный HTTPS для телефона:\n${healthStatus.publicChatUrl}`}
-                        </Text>
+                      {healthStatus.tailscaleChatUrl ? (
+                        <Pressable
+                          onPress={() => setRemoteAiUrl(healthStatus.tailscaleChatUrl || "")}
+                          style={styles.quickUrlButton}
+                        >
+                          <Text style={styles.quickUrlTitle}>
+                            {`Tailscale HTTPS (${healthStatus.tailscaleMode || "Tailnet"}) — нажать чтобы выбрать:`}
+                          </Text>
+                          <Text selectable style={styles.healthText}>
+                            {healthStatus.tailscaleChatUrl}
+                          </Text>
+                        </Pressable>
+                      ) : null}
+                      {healthStatus.tailscaleIpChatUrl ? (
+                        <Pressable
+                          onPress={() => setRemoteAiUrl(healthStatus.tailscaleIpChatUrl || "")}
+                          style={styles.quickUrlButton}
+                        >
+                          <Text style={styles.quickUrlTitle}>
+                            Tailscale IP (через VPN Tailscale) — нажать чтобы выбрать:
+                          </Text>
+                          <Text selectable style={styles.healthText}>
+                            {healthStatus.tailscaleIpChatUrl}
+                          </Text>
+                        </Pressable>
+                      ) : null}
+                      {healthStatus.publicChatUrl &&
+                      healthStatus.publicChatUrl !== healthStatus.tailscaleChatUrl ? (
+                        <Pressable
+                          onPress={() => setRemoteAiUrl(healthStatus.publicChatUrl || "")}
+                          style={styles.quickUrlButton}
+                        >
+                          <Text style={styles.quickUrlTitle}>
+                            Публичный HTTPS — нажать чтобы выбрать:
+                          </Text>
+                          <Text selectable style={styles.healthText}>
+                            {healthStatus.publicChatUrl}
+                          </Text>
+                        </Pressable>
                       ) : null}
                       {healthStatus.lanChatUrls?.length ? (
-                        <Text selectable style={styles.healthText}>
-                          {`Wi-Fi адрес для телефона:\n${healthStatus.lanChatUrls[0]}`}
-                        </Text>
+                        <Pressable
+                          onPress={() => setRemoteAiUrl(healthStatus.lanChatUrls?.[0] || "")}
+                          style={styles.quickUrlButton}
+                        >
+                          <Text style={styles.quickUrlTitle}>
+                            Wi-Fi адрес — нажать чтобы выбрать:
+                          </Text>
+                          <Text selectable style={styles.healthText}>
+                            {healthStatus.lanChatUrls[0]}
+                          </Text>
+                        </Pressable>
                       ) : null}
                     </View>
                   ) : null}
@@ -539,7 +582,22 @@ const createStyles = (palette: ReturnType<typeof getNeuroPalette>) =>
       borderColor: palette.outline,
       backgroundColor: palette.panel,
       paddingHorizontal: 12,
-      paddingVertical: 10
+      paddingVertical: 10,
+      gap: 8
+    },
+    quickUrlButton: {
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: palette.outline,
+      backgroundColor: palette.panelMuted,
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+      gap: 2
+    },
+    quickUrlTitle: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: palette.inkSoft
     },
     healthText: {
       fontSize: 13,

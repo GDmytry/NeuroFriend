@@ -131,7 +131,7 @@ function normalizeTemperature(value, fallback) {
 }
 
 const DEFAULT_SYSTEM_APPEND =
-  "Отвечай развернуто и содержательно: пиши примерно 5–15 предложений, раскрывай мысль подробно, с пояснениями, аргументами или живыми примерами. Не ограничивайся одним-двумя предложениями, если только пользователь сам прямо не попросил ответить кратко.";
+  "Пиши только на чистом грамотном русском языке, без иероглифов и без повторения одних и тех же фраз. Отвечай развернуто и содержательно: пиши примерно 5–15 предложений, раскрывай мысль подробно, с пояснениями, аргументами или живыми примерами. Не ограничивайся одним-двумя предложениями, если только пользователь сам прямо не попросил ответить кратко.";
 
 function normalizeSystemAppend(value) {
   if (value === undefined) {
@@ -155,6 +155,8 @@ function getServerConfig() {
     port: normalizeNumber(process.env.CHAT_SERVER_PORT, 3001),
     apiKey: (process.env.CHAT_SERVER_API_KEY || "").trim(),
     enablePublicTunnel: normalizeBoolean(process.env.ENABLE_PUBLIC_TUNNEL, false),
+    enableTailscaleServe: normalizeBoolean(process.env.ENABLE_TAILSCALE_SERVE, false),
+    enableTailscaleFunnel: normalizeBoolean(process.env.ENABLE_TAILSCALE_FUNNEL, false),
     llmProvider: normalizeProvider(process.env.LLM_PROVIDER),
     llmBaseUrl: configuredBaseUrl,
     llmModel: configuredModel,
@@ -301,6 +303,25 @@ async function scanLocalLlms(timeoutMs = 1_500) {
   return probes.filter(Boolean);
 }
 
+function scoreModelForAutoSelect(modelName) {
+  const lower = String(modelName || "").toLowerCase();
+
+  if (/embed|bge-|rerank|whisper|tts|moondream/.test(lower)) {
+    return -100;
+  }
+
+  // Prefer newer multilingual chat models over legacy qwen 1.x (qwen:latest)
+  if (lower.startsWith("qwen3.5")) return 100;
+  if (lower.startsWith("qwen3")) return 95;
+  if (lower.startsWith("qwen2.5")) return 90;
+  if (lower.startsWith("gemma3") || lower.startsWith("llama3.3") || lower.startsWith("llama3.2") || lower.startsWith("llama3.1")) return 85;
+  if (lower.startsWith("deepseek") || lower.startsWith("mistral") || lower.startsWith("phi4") || lower.startsWith("gemma2")) return 80;
+  if (lower.startsWith("llama3") || lower.startsWith("qwen2")) return 75;
+  if (/^qwen(:|$)/.test(lower)) return 10;
+
+  return 50;
+}
+
 function resolveActiveModel(modelNames, requestedModel = "", configuredModel = "") {
   const candidates = Array.isArray(modelNames) ? modelNames.filter(Boolean) : [];
   const preferred = normalizeModelSetting(requestedModel) || normalizeModelSetting(configuredModel);
@@ -330,7 +351,8 @@ function resolveActiveModel(modelNames, requestedModel = "", configuredModel = "
     }
   }
 
-  return candidates[0];
+  const ranked = [...candidates].sort((a, b) => scoreModelForAutoSelect(b) - scoreModelForAutoSelect(a));
+  return ranked[0];
 }
 
 async function resolveLlmRuntime(config) {
@@ -422,7 +444,8 @@ async function sendOllamaChat(baseUrl, model, messages, config) {
         think: config.ollamaThink,
         options: {
           num_predict: config.llmMaxTokens,
-          temperature: config.llmTemperature
+          temperature: config.llmTemperature,
+          repeat_penalty: 1.15
         }
       })
     },
@@ -462,7 +485,8 @@ async function sendOpenAiChat(baseUrl, model, messages, config) {
     messages,
     stream: false,
     temperature: config.llmTemperature,
-    max_tokens: config.llmMaxTokens
+    max_tokens: config.llmMaxTokens,
+    frequency_penalty: 0.3
   };
 
   const response = await fetchWithTimeout(

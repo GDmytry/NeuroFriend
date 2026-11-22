@@ -16,6 +16,8 @@
     "llm:check": "node server/check.js",
     "llm:ping": "node server/check.js --ping",
     "server:start": "node server/index.js",
+    "server:tailscale": "node server/index.js --tailscale",
+    "server:funnel": "node server/index.js --funnel",
     "server:tunnel": "node server/index.js --tunnel"
   },
   "dependencies": {

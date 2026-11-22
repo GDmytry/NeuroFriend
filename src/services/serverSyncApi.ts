@@ -50,6 +50,9 @@ export type ServerHealthStatus = {
   installedModels?: string[];
   lanChatUrls?: string[];
   publicChatUrl?: string | null;
+  tailscaleChatUrl?: string | null;
+  tailscaleIpChatUrl?: string | null;
+  tailscaleMode?: string | null;
   error?: string | null;
 };
 
@@ -261,6 +264,9 @@ export async function checkServerHealth(customUrl?: string): Promise<ServerHealt
         installedModels?: string[];
         lanChatUrls?: string[];
         publicChatUrl?: string | null;
+        tailscaleChatUrl?: string | null;
+        tailscaleIpChatUrl?: string | null;
+        tailscaleMode?: string | null;
         error?: string | null;
       };
 
@@ -281,6 +287,9 @@ export async function checkServerHealth(customUrl?: string): Promise<ServerHealt
         installedModels: payload.installedModels,
         lanChatUrls: payload.lanChatUrls,
         publicChatUrl: payload.publicChatUrl,
+        tailscaleChatUrl: payload.tailscaleChatUrl ?? null,
+        tailscaleIpChatUrl: payload.tailscaleIpChatUrl ?? null,
+        tailscaleMode: payload.tailscaleMode ?? null,
         error: payload.error ?? null
       };
     } catch (error) {

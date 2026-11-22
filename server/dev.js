@@ -5,6 +5,8 @@ const { join } = require("node:path");
 const projectRoot = join(__dirname, "..");
 const args = process.argv.slice(2);
 const enableTunnel = args.includes("--tunnel");
+const enableTailscale = args.includes("--tailscale");
+const enableFunnel = args.includes("--funnel");
 const openWeb = args.includes("--web");
 const serverOnly = args.includes("--server-only");
 const isWindows = process.platform === "win32";
@@ -75,6 +77,12 @@ process.on("SIGTERM", () => shutdown(0));
 const serverArgs = [join(__dirname, "index.js")];
 if (enableTunnel) {
   serverArgs.push("--tunnel");
+}
+if (enableTailscale) {
+  serverArgs.push("--tailscale");
+}
+if (enableFunnel) {
+  serverArgs.push("--funnel");
 }
 
 console.log(

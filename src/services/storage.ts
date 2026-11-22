@@ -21,9 +21,7 @@ const KEYS = {
 
 const DEFAULT_MODE: NeuralMode = "friend";
 const LEGACY_STALE_URLS = [
-  "5832fea1b0b47d.lhr.life",
-  "nelinux.taildbcf93.ts.net",
-  "192.168.3.145"
+  "5832fea1b0b47d.lhr.life"
 ];
 
 const DEFAULT_SETTINGS: AppSettings = {

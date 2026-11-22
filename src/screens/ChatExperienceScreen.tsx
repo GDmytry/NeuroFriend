@@ -79,24 +79,42 @@ export function ChatExperienceScreen({ navigation }: Props) {
     };
   }, []);
 
+  function scrollToBottom(animated = true) {
+    requestAnimationFrame(() => {
+      messagesScrollRef.current?.scrollToEnd({ animated });
+    });
+  }
+
   useEffect(() => {
-    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
-    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
-    const showSubscription = Keyboard.addListener(showEvent, (event) => {
-      setKeyboardVisible(true);
-      setKeyboardHeight(event.endCoordinates?.height ?? 0);
-      setTimeout(() => {
-        messagesScrollRef.current?.scrollToEnd({ animated: true });
-      }, 40);
-    });
-    const hideSubscription = Keyboard.addListener(hideEvent, () => {
-      setKeyboardVisible(false);
-      setKeyboardHeight(0);
-    });
+    const subscriptions = [
+      Keyboard.addListener(
+        Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
+        (event) => {
+          setKeyboardVisible(true);
+          setKeyboardHeight(event.endCoordinates?.height ?? 0);
+          setTimeout(() => scrollToBottom(true), 60);
+        }
+      ),
+      ...(Platform.OS === "ios"
+        ? [
+            Keyboard.addListener("keyboardDidShow", (event) => {
+              setKeyboardVisible(true);
+              setKeyboardHeight(event.endCoordinates?.height ?? 0);
+              scrollToBottom(true);
+            })
+          ]
+        : []),
+      Keyboard.addListener(
+        Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
+        () => {
+          setKeyboardVisible(false);
+          setKeyboardHeight(0);
+        }
+      )
+    ];
 
     return () => {
-      showSubscription.remove();
-      hideSubscription.remove();
+      subscriptions.forEach((sub) => sub.remove());
     };
   }, []);
 
@@ -335,27 +353,37 @@ export function ChatExperienceScreen({ navigation }: Props) {
 
   return (
     <GradientScreen>
-      <SafeAreaView style={styles.safe}>
+      <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
         <KeyboardAvoidingView
           style={styles.keyboard}
           behavior={Platform.OS === "ios" ? "padding" : "height"}
-          keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 14}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 12}
         >
           <View
             style={[
               styles.container,
               {
-                paddingBottom:
-                  Math.max(insets.bottom, 14) +
-                  (Platform.OS === "android" && keyboardHeight > 0 ? 8 : 0)
+                paddingBottom: keyboardVisible
+                  ? 8
+                  : Math.max(insets.bottom, 12) +
+                    (Platform.OS === "android" && keyboardHeight > 0 ? 8 : 0)
               }
             ]}
           >
-            <PaperPanel style={styles.headerCard}>
-              <OutlinedTitle text="Чат" size={34} style={styles.headerTitleWrap} />
+            <PaperPanel
+              style={[styles.headerCard, keyboardVisible && styles.headerCardCompact]}
+            >
+              <OutlinedTitle
+                text="Чат"
+                size={keyboardVisible ? 22 : 34}
+                style={styles.headerTitleWrap}
+              />
             </PaperPanel>
 
-            <Pressable style={styles.menuButton} onPress={drawerMounted ? closeDrawer : openDrawer}>
+            <Pressable
+              style={[styles.menuButton, keyboardVisible && styles.menuButtonCompact]}
+              onPress={drawerMounted ? closeDrawer : openDrawer}
+            >
               <View style={styles.menuBars}>
                 <View style={styles.menuBar} />
                 <View style={styles.menuBar} />
@@ -363,7 +391,9 @@ export function ChatExperienceScreen({ navigation }: Props) {
               </View>
             </Pressable>
 
-            <PaperPanel style={styles.chatCard}>
+            <PaperPanel
+              style={[styles.chatCard, keyboardVisible && styles.chatCardCompact]}
+            >
               <ScrollView
                 ref={messagesScrollRef}
                 style={styles.messagesScroll}
@@ -373,7 +403,12 @@ export function ChatExperienceScreen({ navigation }: Props) {
                 ]}
                 keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
                 keyboardShouldPersistTaps="handled"
-                onScrollBeginDrag={Keyboard.dismiss}
+                onContentSizeChange={() => scrollToBottom(true)}
+                onLayout={() => {
+                  if (keyboardVisible) {
+                    scrollToBottom(false);
+                  }
+                }}
               >
                 {visibleMessages.length === 0 ? (
                   <View style={styles.emptyWrap}>
@@ -403,9 +438,12 @@ export function ChatExperienceScreen({ navigation }: Props) {
                 ) : null}
               </ScrollView>
 
-              <View style={styles.composerWrap}>
+              <View style={[styles.composerWrap, keyboardVisible && styles.composerWrapCompact]}>
                 <View style={styles.composerTopRow}>
-                  <Pressable onPress={() => void handlePickAttachment()} style={styles.fileButton}>
+                  <Pressable
+                    onPress={() => void handlePickAttachment()}
+                    style={[styles.fileButton, keyboardVisible && styles.fileButtonCompact]}
+                  >
                     <Text style={styles.fileButtonText}>Добавить файл</Text>
                   </Pressable>
                   {keyboardVisible ? (
@@ -444,12 +482,10 @@ export function ChatExperienceScreen({ navigation }: Props) {
                   value={draft}
                   onChangeText={setDraft}
                   onFocus={() => {
-                    setTimeout(() => {
-                      messagesScrollRef.current?.scrollToEnd({ animated: true });
-                    }, 40);
+                    setTimeout(() => scrollToBottom(true), 120);
                   }}
                   multiline
-                  style={styles.input}
+                  style={[styles.input, keyboardVisible && styles.inputCompact]}
                   placeholder="Введите сообщение"
                   placeholderTextColor={palette.inkSoft}
                 />
@@ -459,6 +495,7 @@ export function ChatExperienceScreen({ navigation }: Props) {
                   onPress={() => void handleSend()}
                   loading={sending}
                   disabled={sending || (!draft.trim() && pendingAttachments.length === 0)}
+                  compact={keyboardVisible}
                 />
               </View>
             </PaperPanel>
@@ -602,6 +639,11 @@ const createStyles = (palette: ReturnType<typeof getNeuroPalette>) =>
       marginTop: 12,
       justifyContent: "center"
     },
+    headerCardCompact: {
+      minHeight: 50,
+      marginTop: 4,
+      borderRadius: 24
+    },
     headerTitleWrap: {
       alignSelf: "center"
     },
@@ -624,6 +666,12 @@ const createStyles = (palette: ReturnType<typeof getNeuroPalette>) =>
       elevation: 7,
       zIndex: 3
     },
+    menuButtonCompact: {
+      top: 56,
+      width: 42,
+      height: 42,
+      borderRadius: 21
+    },
     menuBars: {
       gap: 4
     },
@@ -640,6 +688,12 @@ const createStyles = (palette: ReturnType<typeof getNeuroPalette>) =>
       paddingHorizontal: 16,
       paddingTop: 18,
       paddingBottom: 14
+    },
+    chatCardCompact: {
+      marginTop: 10,
+      paddingHorizontal: 12,
+      paddingTop: 10,
+      paddingBottom: 8
     },
     messagesScroll: {
       flex: 1,
@@ -695,7 +749,12 @@ const createStyles = (palette: ReturnType<typeof getNeuroPalette>) =>
       color: palette.ink
     },
     composerWrap: {
-      gap: 10
+      gap: 10,
+      paddingTop: 6
+    },
+    composerWrapCompact: {
+      gap: 6,
+      paddingTop: 4
     },
     composerTopRow: {
       flexDirection: "row",
@@ -711,6 +770,11 @@ const createStyles = (palette: ReturnType<typeof getNeuroPalette>) =>
       backgroundColor: palette.panel,
       paddingHorizontal: 16,
       paddingVertical: 10
+    },
+    fileButtonCompact: {
+      borderWidth: 2,
+      paddingHorizontal: 12,
+      paddingVertical: 6
     },
     fileButtonText: {
       fontSize: 14,
@@ -760,6 +824,15 @@ const createStyles = (palette: ReturnType<typeof getNeuroPalette>) =>
       color: palette.ink,
       fontStyle: "italic",
       textAlignVertical: "center"
+    },
+    inputCompact: {
+      minHeight: 44,
+      maxHeight: 92,
+      borderRadius: 22,
+      borderWidth: 2,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      fontSize: 16
     },
     dimmer: {
       ...StyleSheet.absoluteFillObject,

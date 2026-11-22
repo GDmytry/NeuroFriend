@@ -1,6 +1,6 @@
 const { createServer } = require("node:http");
-const { spawn } = require("node:child_process");
-const { writeFileSync } = require("node:fs");
+const { execFileSync, spawn } = require("node:child_process");
+const { existsSync, writeFileSync } = require("node:fs");
 const { networkInterfaces } = require("node:os");
 const { join } = require("node:path");
 const {
@@ -30,6 +30,12 @@ if (cliArgs.has("--tunnel")) {
 }
 if (cliArgs.has("--no-tunnel")) {
   config.enablePublicTunnel = false;
+}
+if (cliArgs.has("--tailscale")) {
+  config.enableTailscaleServe = true;
+}
+if (cliArgs.has("--funnel")) {
+  config.enableTailscaleFunnel = true;
 }
 
 const server = createServer(async (request, response) => {
@@ -195,6 +201,14 @@ const server = createServer(async (request, response) => {
 
 let publicTunnelBaseUrl = "";
 let tunnelProcess = null;
+let tailscaleState = {
+  available: false,
+  dnsName: "",
+  ip: "",
+  httpsChatUrl: null,
+  ipChatUrl: null,
+  mode: null
+};
 
 server.on("error", (error) => {
   if (error && error.code === "EADDRINUSE") {
@@ -212,6 +226,7 @@ server.on("error", (error) => {
 
 server.listen(config.port, config.host, () => {
   const lanAddresses = getLanAddresses();
+  tailscaleState = setupTailscaleAccess();
   const llmTargetLabel = config.llmBaseUrl
     ? `${config.llmBaseUrl} (${config.llmProvider})`
     : "auto-detect (Ollama / LM Studio / llama.cpp / vLLM / MLX)";
@@ -223,7 +238,15 @@ server.listen(config.port, config.host, () => {
   console.log(`  Bridge:    http://${config.host}:${config.port}`);
   console.log(`  PC URL:    http://localhost:${config.port}/chat`);
   for (const ip of lanAddresses) {
-    console.log(`  Phone URL: http://${ip}:${config.port}/chat`);
+    console.log(`  Wi-Fi URL: http://${ip}:${config.port}/chat`);
+  }
+  if (tailscaleState.httpsChatUrl) {
+    console.log(
+      `  Tailscale (${tailscaleState.mode || "HTTPS"}): ${tailscaleState.httpsChatUrl}`
+    );
+  }
+  if (tailscaleState.ipChatUrl) {
+    console.log(`  Tailscale IP: ${tailscaleState.ipChatUrl}`);
   }
   console.log(`  Health:    http://localhost:${config.port}/health`);
   console.log(`  LLM:       ${llmTargetLabel}`);
@@ -408,7 +431,10 @@ async function handleHealth(response) {
       modelAvailable,
       installedModels: runtime.models,
       lanChatUrls,
-      publicChatUrl,
+      publicChatUrl: publicChatUrl || (tailscaleState.mode === "Funnel" ? tailscaleState.httpsChatUrl : null),
+      tailscaleChatUrl: tailscaleState.httpsChatUrl,
+      tailscaleIpChatUrl: tailscaleState.ipChatUrl,
+      tailscaleMode: tailscaleState.mode,
       error: modelAvailable
         ? null
         : `LLM доступна (${runtime.label} на ${runtime.baseUrl}), но не найдено загруженных моделей.`
@@ -428,7 +454,10 @@ async function handleHealth(response) {
       modelAvailable: false,
       installedModels: [],
       lanChatUrls,
-      publicChatUrl,
+      publicChatUrl: publicChatUrl || (tailscaleState.mode === "Funnel" ? tailscaleState.httpsChatUrl : null),
+      tailscaleChatUrl: tailscaleState.httpsChatUrl,
+      tailscaleIpChatUrl: tailscaleState.ipChatUrl,
+      tailscaleMode: tailscaleState.mode,
       error: getErrorMessage(error)
     });
   }
@@ -475,7 +504,9 @@ function getLanAddresses() {
         entry &&
         entry.family === "IPv4" &&
         !entry.internal &&
-        !entry.address.startsWith("169.254.")
+        !entry.address.startsWith("169.254.") &&
+        !entry.address.startsWith("198.18.") &&
+        !entry.address.startsWith("198.19.")
       ) {
         let priority = isVirtual ? 10 : 1;
         if (!isVirtual && entry.address.startsWith("192.168.")) {
@@ -493,6 +524,123 @@ function getLanAddresses() {
 
   candidates.sort((a, b) => a.priority - b.priority);
   return [...new Set(candidates.map((item) => item.address))];
+}
+
+function findTailscaleBinary() {
+  if (process.platform === "win32") {
+    const standardWin = "C:\\Program Files\\Tailscale\\tailscale.exe";
+    if (existsSync(standardWin)) {
+      return standardWin;
+    }
+  }
+  return "tailscale";
+}
+
+function setupTailscaleAccess() {
+  const result = {
+    available: false,
+    dnsName: "",
+    ip: "",
+    httpsChatUrl: null,
+    ipChatUrl: null,
+    mode: null
+  };
+
+  const tsBin = findTailscaleBinary();
+  let statusJson;
+  try {
+    const raw = execFileSync(tsBin, ["status", "--json"], {
+      encoding: "utf8",
+      timeout: 3_000,
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true
+    });
+    statusJson = JSON.parse(raw);
+  } catch {
+    return result;
+  }
+
+  if (!statusJson || statusJson.BackendState !== "Running") {
+    return result;
+  }
+
+  const self = statusJson.Self || {};
+  const dnsName = String(self.DNSName || "").replace(/\.+$/, "").trim();
+  const ips = Array.isArray(self.TailscaleIPs) ? self.TailscaleIPs : [];
+  const ipv4 = ips.find((addr) => typeof addr === "string" && /^\d+\.\d+\.\d+\.\d+$/.test(addr)) || "";
+
+  result.available = true;
+  result.dnsName = dnsName;
+  result.ip = ipv4;
+  result.ipChatUrl = ipv4 ? `http://${ipv4}:${config.port}/chat` : null;
+
+  if (config.enableTailscaleFunnel && dnsName) {
+    try {
+      execFileSync(tsBin, ["funnel", "--bg", String(config.port)], {
+        encoding: "utf8",
+        timeout: 6_000,
+        stdio: ["ignore", "pipe", "pipe"],
+        windowsHide: true
+      });
+      result.httpsChatUrl = `https://${dnsName}/chat`;
+      result.mode = "Funnel";
+      return result;
+    } catch (error) {
+      console.warn(
+        `[neuro-chat-server] Tailscale Funnel не удалось включить автоматически: ${getErrorMessage(error)}`
+      );
+    }
+  }
+
+  if (config.enableTailscaleServe && dnsName) {
+    try {
+      execFileSync(tsBin, ["serve", "--bg", String(config.port)], {
+        encoding: "utf8",
+        timeout: 6_000,
+        stdio: ["ignore", "pipe", "pipe"],
+        windowsHide: true
+      });
+      result.httpsChatUrl = `https://${dnsName}/chat`;
+      result.mode = "Serve";
+      return result;
+    } catch (error) {
+      console.warn(
+        `[neuro-chat-server] Tailscale Serve недоступен (${getErrorMessage(error)}). Используйте Tailscale IP: ${result.ipChatUrl || "не найден"}`
+      );
+    }
+  }
+
+  // Check if serve/funnel is already active from an earlier run
+  if (dnsName) {
+    try {
+      const funnelStatus = execFileSync(tsBin, ["funnel", "status"], {
+        encoding: "utf8",
+        timeout: 2_500,
+        stdio: ["ignore", "pipe", "pipe"],
+        windowsHide: true
+      });
+      if (funnelStatus.includes(`:${config.port}`)) {
+        result.httpsChatUrl = `https://${dnsName}/chat`;
+        result.mode = "Funnel";
+        return result;
+      }
+    } catch {}
+
+    try {
+      const serveStatus = execFileSync(tsBin, ["serve", "status"], {
+        encoding: "utf8",
+        timeout: 2_500,
+        stdio: ["ignore", "pipe", "pipe"],
+        windowsHide: true
+      });
+      if (serveStatus.includes(`:${config.port}`)) {
+        result.httpsChatUrl = `https://${dnsName}/chat`;
+        result.mode = "Serve";
+      }
+    } catch {}
+  }
+
+  return result;
 }
 
 function startPublicSshTunnel() {
