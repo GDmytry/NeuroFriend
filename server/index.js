@@ -614,6 +614,23 @@ function setupTailscaleAccess() {
   result.ip = ipv4;
   result.ipChatUrl = ipv4 ? `http://${ipv4}:${config.port}/chat` : null;
 
+  // Check if Funnel is already active first so Serve never downgrades an active Funnel
+  if (dnsName) {
+    try {
+      const funnelStatus = execFileSync(tsBin, ["funnel", "status"], {
+        encoding: "utf8",
+        timeout: 2_500,
+        stdio: ["ignore", "pipe", "pipe"],
+        windowsHide: true
+      });
+      if (funnelStatus.includes(`:${config.port}`) && /funnel on/i.test(funnelStatus)) {
+        result.httpsChatUrl = `https://${dnsName}/chat`;
+        result.mode = "Funnel";
+        return result;
+      }
+    } catch {}
+  }
+
   if (config.enableTailscaleFunnel && dnsName) {
     try {
       execFileSync(tsBin, ["funnel", "--bg", String(config.port)], {
@@ -650,22 +667,8 @@ function setupTailscaleAccess() {
     }
   }
 
-  // Check if serve/funnel is already active from an earlier run
+  // Check if serve is already active from an earlier run
   if (dnsName) {
-    try {
-      const funnelStatus = execFileSync(tsBin, ["funnel", "status"], {
-        encoding: "utf8",
-        timeout: 2_500,
-        stdio: ["ignore", "pipe", "pipe"],
-        windowsHide: true
-      });
-      if (funnelStatus.includes(`:${config.port}`)) {
-        result.httpsChatUrl = `https://${dnsName}/chat`;
-        result.mode = "Funnel";
-        return result;
-      }
-    } catch {}
-
     try {
       const serveStatus = execFileSync(tsBin, ["serve", "status"], {
         encoding: "utf8",
